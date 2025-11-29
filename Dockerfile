@@ -8,6 +8,15 @@
 # JRE만 사용하는 이유: 실행만 하면 되므로 JDK(개발도구) 불필요
 FROM eclipse-temurin:17-jre
 
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && dpkg-reconfigure -f noninteractive tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 # ============================================
 # 2. 작업 디렉토리 설정
 # ============================================
@@ -35,4 +44,3 @@ EXPOSE 8080
 # 컨테이너가 시작될 때 실행할 명령어
 # java -jar app.jar로 Spring Boot 실행
 ENTRYPOINT ["java", "-jar", "app.jar"]
-
