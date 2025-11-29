@@ -7,11 +7,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface GeofenceRepository extends JpaRepository<Geofence, Long> {
 
     List<Geofence> findByUser(User user);
+
+    List<Geofence> findByTypeAndEndTimeBefore(int type, LocalDateTime endTime);
 
     /**
      * 특정 위치로부터 지정된 거리 내의 지오펜스 조회 (PostGIS ST_DWithin 사용)
