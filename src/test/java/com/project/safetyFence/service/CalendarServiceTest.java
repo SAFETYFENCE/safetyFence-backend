@@ -53,7 +53,8 @@ class CalendarServiceTest {
         EventDataRequestDto requestDto = new EventDataRequestDto(
                 "Meeting with client",
                 "2024-10-25",
-                "14:30"
+                "14:30",
+                null
         );
 
         int initialEventCount = testUser.getUserEvents().size();
@@ -79,19 +80,22 @@ class CalendarServiceTest {
         EventDataRequestDto event1 = new EventDataRequestDto(
                 "Morning Meeting",
                 "2024-10-25",
-                "09:00"
+                "09:00",
+                null
         );
 
         EventDataRequestDto event2 = new EventDataRequestDto(
                 "Lunch Appointment",
                 "2024-10-25",
-                "12:30"
+                "12:30",
+                null
         );
 
         EventDataRequestDto event3 = new EventDataRequestDto(
                 "Evening Conference",
                 "2024-10-26",
-                "18:00"
+                "18:00",
+                null
         );
 
         // when
@@ -115,7 +119,8 @@ class CalendarServiceTest {
         EventDataRequestDto requestDto = new EventDataRequestDto(
                 "Team Building",
                 "2024-11-01",
-                "10:00"
+                "10:00",
+                null
         );
 
         // when
@@ -137,7 +142,8 @@ class CalendarServiceTest {
         EventDataRequestDto requestDto = new EventDataRequestDto(
                 "New Year Event",
                 "2025-01-01",
-                "00:00"
+                "00:00",
+                null
         );
 
         // when
@@ -158,7 +164,8 @@ class CalendarServiceTest {
         EventDataRequestDto requestDto = new EventDataRequestDto(
                 "Persistent Event",
                 "2024-12-25",
-                "15:00"
+                "15:00",
+                null
         );
 
         // when
@@ -181,7 +188,8 @@ class CalendarServiceTest {
         EventDataRequestDto requestDto = new EventDataRequestDto(
                 "Event to Delete",
                 "2024-11-01",
-                "10:00"
+                "10:00",
+                null
         );
         calendarService.addEvent(TEST_NUMBER, requestDto);
 
@@ -201,9 +209,9 @@ class CalendarServiceTest {
     @DisplayName("deleteEvent - only deletes specified event from database")
     void deleteEvent_DeletesOnlySpecifiedEvent() {
         // given - add multiple events
-        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event 1", "2024-11-01", "10:00"));
-        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event 2", "2024-11-02", "11:00"));
-        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event 3", "2024-11-03", "12:00"));
+        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event 1", "2024-11-01", "10:00", null));
+        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event 2", "2024-11-02", "11:00", null));
+        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event 3", "2024-11-03", "12:00", null));
 
         User user = userRepository.findByNumber(TEST_NUMBER);
         Long eventId1 = user.getUserEvents().get(0).getId();
@@ -225,7 +233,7 @@ class CalendarServiceTest {
     @DisplayName("deleteEvent - User 컬렉션도 검증 (orphanRemoval 테스트)")
     void deleteEvent_VerifyUserCollectionSync() {
         // given
-        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event to Delete", "2024-11-01", "10:00"));
+        calendarService.addEvent(TEST_NUMBER, new EventDataRequestDto("Event to Delete", "2024-11-01", "10:00", null));
 
         User user = userRepository.findByNumber(TEST_NUMBER);
         Long eventId = user.getUserEvents().get(0).getId();

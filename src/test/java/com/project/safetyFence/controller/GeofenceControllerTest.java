@@ -51,9 +51,11 @@ class GeofenceControllerTest {
     private EntityManager entityManager;
 
     private User testUser;
+    private User guardianUser;
     private Geofence permanentGeofence;
     private Geofence temporaryGeofence;
     private String testApiKey;
+    private String guardianApiKey;
 
     @BeforeEach
     void setUp() {
@@ -64,6 +66,14 @@ class GeofenceControllerTest {
 
         UserAddress userAddress = new UserAddress(testUser, "서울", "부산", "서울시 강남구", "상세주소1", "부산시 해운대구");
         testUser.addUserAddress(userAddress);
+
+        // Guardian user with API Key (보호자)
+        guardianUser = new User("01098765432", "guardian", "password", LocalDate.now(), "guardian-link");
+        guardianApiKey = "guardian-api-key-12345678901234567890123456";
+        guardianUser.updateApiKey(guardianApiKey);
+
+        UserAddress guardianAddress = new UserAddress(guardianUser, "서울", "인천", "서울시 종로구", "상세주소2", "인천시 남동구");
+        guardianUser.addUserAddress(guardianAddress);
 
         // Permanent geofences
         Geofence homeGeofence = new Geofence(testUser, "집", "서울시 노원구 노원로 564",
@@ -86,8 +96,9 @@ class GeofenceControllerTest {
         testUser.addGeofence(permanentGeofence);
         testUser.addGeofence(temporaryGeofence);
 
-        // Save user (cascade will save geofences)
+        // Save users (cascade will save geofences)
         testUser = userRepository.save(testUser);
+        guardianUser = userRepository.save(guardianUser);
         entityManager.flush(); // ID 할당을 위해 즉시 DB 반영
 
         // Reload to get managed entities with IDs
@@ -205,7 +216,7 @@ class GeofenceControllerTest {
     void deleteFence_Success() throws Exception {
         // given
         Long geofenceId = permanentGeofence.getId();
-        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(geofenceId);
+        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(geofenceId, null);
         String jsonRequest = objectMapper.writeValueAsString(requestDto);
 
         // when & then
@@ -229,7 +240,7 @@ class GeofenceControllerTest {
     void deleteFence_VerifyDatabaseDeletion() throws Exception {
         // given
         Long geofenceId = temporaryGeofence.getId();
-        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(geofenceId);
+        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(geofenceId, null);
         String jsonRequest = objectMapper.writeValueAsString(requestDto);
 
         // when
@@ -251,7 +262,7 @@ class GeofenceControllerTest {
     @DisplayName("deleteFence - API Key 없이 요청 시 401 에러")
     void deleteFence_NoApiKey_Unauthorized() throws Exception {
         // given
-        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(permanentGeofence.getId());
+        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(permanentGeofence.getId(), null);
         String jsonRequest = objectMapper.writeValueAsString(requestDto);
 
         // when & then
@@ -266,7 +277,7 @@ class GeofenceControllerTest {
     @DisplayName("deleteFence - 잘못된 API Key로 요청 시 401 에러")
     void deleteFence_InvalidApiKey_Unauthorized() throws Exception {
         // given
-        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(permanentGeofence.getId());
+        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(permanentGeofence.getId(), null);
         String jsonRequest = objectMapper.writeValueAsString(requestDto);
 
         // when & then
@@ -289,14 +300,14 @@ class GeofenceControllerTest {
         mockMvc.perform(delete("/geofence/deleteFence")
                         .header("X-API-Key", testApiKey)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new GeofenceDeleteRequestDto(id1))))
+                        .content(objectMapper.writeValueAsString(new GeofenceDeleteRequestDto(id1, null))))
                 .andExpect(status().isOk());
 
         // when - delete second geofence
         mockMvc.perform(delete("/geofence/deleteFence")
                         .header("X-API-Key", testApiKey)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new GeofenceDeleteRequestDto(id2))))
+                        .content(objectMapper.writeValueAsString(new GeofenceDeleteRequestDto(id2, null))))
                 .andExpect(status().isOk());
 
         entityManager.flush();
@@ -306,5 +317,81 @@ class GeofenceControllerTest {
         assertThat(geofenceRepository.findById(id1)).isEmpty();
         assertThat(geofenceRepository.findById(id2)).isEmpty();
         assertThat(geofenceRepository.findAll()).hasSize(2); // 4개 중 2개 삭제
+    }
+
+    // ============= 보호자 기능 테스트 =============
+
+    @Test
+    @DisplayName("findGeofenceList - 보호자가 NumberRequestDto로 피보호자의 지오펜스 조회")
+    void findGeofenceList_Guardian_WithNumberRequestDto() throws Exception {
+        // given
+        com.project.safetyFence.mypage.dto.NumberRequestDto requestDto =
+                new com.project.safetyFence.mypage.dto.NumberRequestDto(testUser.getNumber());
+        String jsonRequest = objectMapper.writeValueAsString(requestDto);
+
+        // when & then
+        mockMvc.perform(post("/geofence/list")
+                        .header("X-API-Key", guardianApiKey) // 보호자 API Key 사용
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonRequest))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.length()").value(4)) // testUser의 4개 지오펜스
+                .andExpect(jsonPath("$[0].name").exists())
+                .andExpect(jsonPath("$[0].address").exists())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("findGeofenceList - NumberRequestDto 없이 본인 지오펜스 조회")
+    void findGeofenceList_WithoutNumberRequestDto_Self() throws Exception {
+        // when & then - NumberRequestDto 없이 요청하면 본인 지오펜스 조회
+        mockMvc.perform(post("/geofence/list")
+                        .header("X-API-Key", testApiKey)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.length()").value(4))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("findGeofenceList - 보호자가 자신의 지오펜스 조회 (지오펜스 없음)")
+    void findGeofenceList_Guardian_NoGeofences() throws Exception {
+        // when & then - guardianUser는 지오펜스가 없음
+        mockMvc.perform(post("/geofence/list")
+                        .header("X-API-Key", guardianApiKey)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.length()").value(0))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("deleteFence - 보호자가 NumberRequestDto로 피보호자의 지오펜스 삭제")
+    void deleteFence_Guardian_WithNumberRequestDto() throws Exception {
+        // given
+        Long geofenceId = permanentGeofence.getId();
+        GeofenceDeleteRequestDto requestDto = new GeofenceDeleteRequestDto(
+                geofenceId,
+                testUser.getNumber() // 피보호자 번호
+        );
+        String jsonRequest = objectMapper.writeValueAsString(requestDto);
+
+        // when & then
+        mockMvc.perform(delete("/geofence/deleteFence")
+                        .header("X-API-Key", guardianApiKey) // 보호자 API Key 사용
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonRequest))
+                .andExpect(status().isOk())
+                .andExpect(content().string("지오펜스가 성공적으로 삭제되었습니다."))
+                .andDo(print());
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // Verify geofence was deleted
+        assertThat(geofenceRepository.findById(geofenceId)).isEmpty();
     }
 }

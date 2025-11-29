@@ -1,7 +1,10 @@
 package com.project.safetyFence.service;
 
+import com.project.safetyFence.common.exception.CustomException;
+import com.project.safetyFence.common.exception.ErrorResult;
 import com.project.safetyFence.geofence.domain.Geofence;
 import com.project.safetyFence.user.domain.User;
+import com.project.safetyFence.user.domain.UserAddress;
 import com.project.safetyFence.geofence.dto.GeofenceRequestDto;
 import com.project.safetyFence.geofence.GeofenceRepository;
 import com.project.safetyFence.user.UserRepository;
@@ -196,7 +199,8 @@ class GeofenceServiceTest {
                 "서울시 강남구 테헤란로 152",
                 0,  // permanent type
                 null,
-                null
+                null,
+                null  // number field
         );
 
         int initialCount = testUser.getGeofences().size();
@@ -223,15 +227,16 @@ class GeofenceServiceTest {
     @Disabled("실제 카카오 API 키가 필요하므로 기본적으로 비활성화되어 있습니다.")
     void createNewFence_TemporaryGeofence_Success() {
         // given
-        String startTime = "2025-10-21T10:00:00";
-        String endTime = "2025-10-21T18:00:00";
+        String startTime = "10:00";
+        String endTime = "18:00";
 
         GeofenceRequestDto requestDto = new GeofenceRequestDto(
                 "Temporary Event",
                 "서울시 강남구 역삼동",
                 1,  // temporary type
                 startTime,
-                endTime
+                endTime,
+                null  // number field
         );
 
         int initialCount = testUser.getGeofences().size();
@@ -253,5 +258,102 @@ class GeofenceServiceTest {
         assertThat(newGeofence.getMaxSequence()).isEqualTo(100);
         assertThat(newGeofence.getStartTime()).isNotNull();
         assertThat(newGeofence.getEndTime()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("createNewFence - 잘못된 주소로 지오펜스 생성 시 CustomException 발생")
+    void createNewFence_InvalidAddress_ThrowsCustomException() {
+        // given
+        GeofenceRequestDto requestDto = new GeofenceRequestDto(
+                "Invalid Location",
+                "잘못된주소12345!@#$%",  // 유효하지 않은 주소
+                0,
+                null,
+                null,
+                null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> geofenceService.createNewFence(TEST_NUMBER, requestDto))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorResult", ErrorResult.GEOFENCE_ADDRESS_CONVERSION_FAILED);
+    }
+
+    @Test
+    @DisplayName("createHomeGeofence - 잘못된 주소로 집 지오펜스 생성 시 CustomException 발생")
+    void createHomeGeofence_InvalidAddress_ThrowsCustomException() {
+        // given
+        User user = new User("01099999999", "testUser", "password", LocalDate.now(), "link");
+        UserAddress userAddress = new UserAddress(
+                user,
+                "서울",
+                "부산",
+                "잘못된집주소!@#$%",  // 유효하지 않은 집 주소
+                "상세주소",
+                "부산시 해운대구"
+        );
+
+        // when & then
+        assertThatThrownBy(() -> geofenceService.createHomeGeofence(userAddress))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorResult", ErrorResult.GEOFENCE_ADDRESS_CONVERSION_FAILED);
+    }
+
+    @Test
+    @DisplayName("createCenterGeofence - 잘못된 주소로 센터 지오펜스 생성 시 CustomException 발생")
+    void createCenterGeofence_InvalidAddress_ThrowsCustomException() {
+        // given
+        User user = new User("01099999999", "testUser", "password", LocalDate.now(), "link");
+        UserAddress userAddress = new UserAddress(
+                user,
+                "서울",
+                "부산",
+                "서울시 강남구",
+                "상세주소",
+                "잘못된센터주소!@#$%"  // 유효하지 않은 센터 주소
+        );
+
+        // when & then
+        assertThatThrownBy(() -> geofenceService.createCenterGeofence(userAddress))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorResult", ErrorResult.GEOFENCE_ADDRESS_CONVERSION_FAILED);
+    }
+
+    @Test
+    @DisplayName("createNewFence - 빈 주소로 지오펜스 생성 시 CustomException 발생")
+    void createNewFence_EmptyAddress_ThrowsCustomException() {
+        // given
+        GeofenceRequestDto requestDto = new GeofenceRequestDto(
+                "Empty Address Location",
+                "",  // 빈 주소
+                0,
+                null,
+                null,
+                null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> geofenceService.createNewFence(TEST_NUMBER, requestDto))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorResult", ErrorResult.GEOFENCE_ADDRESS_CONVERSION_FAILED);
+    }
+
+    @Test
+    @DisplayName("createNewFence - null 주소로 지오펜스 생성 시 CustomException 발생")
+    void createNewFence_NullAddress_ThrowsCustomException() {
+        // given
+        GeofenceRequestDto requestDto = new GeofenceRequestDto(
+                "Null Address Location",
+                null,  // null 주소
+                0,
+                null,
+                null,
+                null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> geofenceService.createNewFence(TEST_NUMBER, requestDto))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorResult", ErrorResult.GEOFENCE_ADDRESS_CONVERSION_FAILED);
     }
 }
