@@ -1,6 +1,7 @@
 package com.project.safetyFence.notification;
 
 import com.google.firebase.messaging.*;
+import com.project.safetyFence.link.LinkRepository;
 import com.project.safetyFence.link.domain.Link;
 import com.project.safetyFence.notification.domain.DeviceToken;
 import com.project.safetyFence.user.UserRepository;
@@ -18,6 +19,7 @@ import java.util.List;
 public class NotificationService {
 
     private final DeviceTokenRepository deviceTokenRepository;
+    private final LinkRepository linkRepository;
     private final UserRepository userRepository;
 
     /**
@@ -28,15 +30,8 @@ public class NotificationService {
      */
     @Transactional(readOnly = true)
     public void sendNotificationToSupporters(User elderUser, String title, String body) {
-        // links를 함께 로드
-        User userWithLinks = userRepository.findByNumberWithLinks(elderUser.getNumber());
-
-        if (userWithLinks == null) {
-            log.warn("⚠️ 어르신을 찾을 수 없음: number={}", elderUser.getNumber());
-            return;
-        }
-
-        List<Link> links = userWithLinks.getLinks();
+        // 어르신 번호가 link.user_number(피보호자)인 링크들을 조회해 보호자 목록을 얻는다.
+        List<Link> links = linkRepository.findByUserNumber(elderUser.getNumber());
 
         if (links.isEmpty()) {
             log.info("ℹ️ 보호자가 없어 알림 전송 생략: 어르신={}", elderUser.getNumber());
@@ -46,8 +41,8 @@ public class NotificationService {
         log.info("🔔 {} 명의 보호자에게 알림 전송 시작: 어르신={}", links.size(), elderUser.getNumber());
 
         for (Link link : links) {
-            String supporterNumber = link.getUserNumber();
-            sendNotificationToUser(supporterNumber, title, body, elderUser.getNumber());
+            User supporter = link.getUser();
+            sendNotificationToUser(supporter.getNumber(), title, body, elderUser.getNumber());
         }
     }
 
