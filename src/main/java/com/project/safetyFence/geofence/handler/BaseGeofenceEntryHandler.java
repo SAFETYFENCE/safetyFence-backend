@@ -5,15 +5,17 @@ import com.project.safetyFence.log.domain.Log;
 import com.project.safetyFence.notification.NotificationService;
 import com.project.safetyFence.user.domain.User;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
 
 @Slf4j
 public abstract class BaseGeofenceEntryHandler implements GeofenceEntryHandler {
 
-    @Autowired
-    private NotificationService notificationService;
+    protected final NotificationService notificationService;
+
+    protected BaseGeofenceEntryHandler(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     @Override
     public final void handle(User user, Geofence geofence) {

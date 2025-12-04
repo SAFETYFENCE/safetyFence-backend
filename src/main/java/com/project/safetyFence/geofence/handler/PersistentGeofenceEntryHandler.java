@@ -1,6 +1,7 @@
 package com.project.safetyFence.geofence.handler;
 
 import com.project.safetyFence.geofence.domain.Geofence;
+import com.project.safetyFence.notification.NotificationService;
 import com.project.safetyFence.user.domain.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,10 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class PersistentGeofenceEntryHandler extends BaseGeofenceEntryHandler {
+
+    public PersistentGeofenceEntryHandler(NotificationService notificationService) {
+        super(notificationService);
+    }
 
     @Override
     protected void handleEntry(User user, Geofence geofence) {
