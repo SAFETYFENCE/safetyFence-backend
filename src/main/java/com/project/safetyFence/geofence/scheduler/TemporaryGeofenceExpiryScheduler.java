@@ -3,6 +3,7 @@ package com.project.safetyFence.geofence.scheduler;
 import com.project.safetyFence.geofence.GeofenceRepository;
 import com.project.safetyFence.geofence.domain.Geofence;
 import com.project.safetyFence.log.domain.Log;
+import com.project.safetyFence.notification.NotificationService;
 import com.project.safetyFence.user.domain.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class TemporaryGeofenceExpiryScheduler {
     private static final int TEMPORARY_GEOFENCE_TYPE = 1;
 
     private final GeofenceRepository geofenceRepository;
+    private final NotificationService notificationService;
 
     @Scheduled(fixedDelayString = "${geofence.temporary.expiration-check-interval:60000}")
     @Transactional
@@ -39,11 +41,16 @@ public class TemporaryGeofenceExpiryScheduler {
         expiredGeofences.forEach(geofence -> handleExpiration(geofence, now));
     }
 
-    // TODO 현재는 삭제만 하지만 알림을 날려야한다
     private void handleExpiration(Geofence geofence, LocalDateTime now) {
         User user = geofence.getUser();
 
+        // 1. 만료 로그 저장
         saveExpirationLog(user, geofence, now);
+
+        // 2. 보호자들에게 알림 전송
+        sendExpirationNotification(user, geofence);
+
+        // 3. 지오펜스 삭제
         user.removeGeofence(geofence); // orphanRemoval = true
 
         log.info("일시 지오펜스 만료: userNumber={}, geofenceId={}, name={}",
@@ -59,5 +66,15 @@ public class TemporaryGeofenceExpiryScheduler {
         );
 
         user.addLog(expirationLog);
+    }
+
+    /**
+     * 일시적 지오펜스 만료 시 보호자들에게 알림 전송
+     */
+    private void sendExpirationNotification(User user, Geofence geofence) {
+        String title = "⏰ " + user.getName() + "님 일정 알림";
+        String body = geofence.getName() + "에 시간 내 도착하지 않았습니다.";
+
+        notificationService.sendNotificationToSupporters(user, title, body);
     }
 }
