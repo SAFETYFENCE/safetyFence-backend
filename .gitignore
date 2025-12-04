@@ -63,3 +63,5 @@ logs/
 
 # 배포가이드 파일
 claudedocs/DEPLOYMENT_GUIDE.md
+
+src/main/resources/firebase-service-account.json

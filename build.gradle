@@ -45,6 +45,9 @@ dependencies {
 	// json
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.3'
 
+    // Firebase Admin SDK 추가
+    implementation 'com.google.firebase:firebase-admin:9.2.0'
+
 	// PostgreSQL
     implementation 'org.postgresql:postgresql:42.7.1'
 
