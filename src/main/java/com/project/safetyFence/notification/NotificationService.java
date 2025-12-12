@@ -137,4 +137,83 @@ public class NotificationService {
         deviceTokenRepository.deleteByToken(token);
         log.info("✅ 디바이스 토큰 삭제: token={}", token.substring(0, Math.min(20, token.length())) + "...");
     }
+
+    /**
+     * 긴급 알림 전송
+     * 이용자의 모든 보호자에게 긴급 상황 알림 전송
+     * @param elderUser 긴급 버튼을 누른 이용자
+     */
+    @Transactional(readOnly = true)
+    public void sendEmergencyAlert(User elderUser) {
+        String title = "🚨 긴급 알림";
+        String body = String.format("%s님이 긴급 버튼을 클릭하셨어요. 확인 부탁드려요!", elderUser.getName());
+
+        log.info("🚨 긴급 알림 전송 시작: 이용자={}, 이름={}", elderUser.getNumber(), elderUser.getName());
+
+        // 긴급 알림용 전송 (type="emergency")
+        sendEmergencyNotificationToSupporters(elderUser, title, body);
+
+        log.info("✅ 긴급 알림 전송 완료: 이용자={}", elderUser.getNumber());
+    }
+
+    /**
+     * 긴급 알림을 보호자들에게 전송 (type="emergency")
+     */
+    private void sendEmergencyNotificationToSupporters(User elderUser, String title, String body) {
+        List<Link> links = linkRepository.findByUserNumber(elderUser.getNumber());
+
+        if (links.isEmpty()) {
+            log.info("ℹ️ 보호자가 없어 긴급 알림 전송 생략: 어르신={}", elderUser.getNumber());
+            return;
+        }
+
+        log.info("🚨 {} 명의 보호자에게 긴급 알림 전송 시작: 어르신={}", links.size(), elderUser.getNumber());
+
+        for (Link link : links) {
+            User supporter = link.getUser();
+            List<DeviceToken> tokens = deviceTokenRepository.findByUser(supporter);
+
+            for (DeviceToken deviceToken : tokens) {
+                sendEmergencyFCM(deviceToken.getToken(), title, body, elderUser.getNumber());
+            }
+        }
+    }
+
+    /**
+     * 긴급 알림 FCM 전송 (type="emergency")
+     */
+    private void sendEmergencyFCM(String token, String title, String body, String elderNumber) {
+        try {
+            Message message = Message.builder()
+                    .setToken(token)
+                    .setNotification(Notification.builder()
+                            .setTitle(title)
+                            .setBody(body)
+                            .build())
+                    .putData("elderNumber", elderNumber)
+                    .putData("type", "emergency")  // ⭐ 긴급 알림 타입
+                    .setAndroidConfig(AndroidConfig.builder()
+                            .setPriority(AndroidConfig.Priority.HIGH)
+                            .setNotification(AndroidNotification.builder()
+                                    .setSound("default")
+                                    .setChannelId("emergency_notifications")  // ⭐ 긴급 알림 채널
+                                    .build())
+                            .build())
+                    .setApnsConfig(ApnsConfig.builder()
+                            .setAps(Aps.builder()
+                                    .setSound("default")
+                                    .setBadge(1)
+                                    .build())
+                            .build())
+                    .build();
+
+            String response = FirebaseMessaging.getInstance().send(message);
+            log.info("✅ 긴급 FCM 알림 전송 성공: token={}, response={}",
+                    token.substring(0, Math.min(20, token.length())) + "...", response);
+
+        } catch (FirebaseMessagingException e) {
+            log.error("❌ 긴급 FCM 알림 전송 실패: token={}, error={}",
+                    token.substring(0, Math.min(20, token.length())) + "...", e.getMessage());
+        }
+    }
 }
