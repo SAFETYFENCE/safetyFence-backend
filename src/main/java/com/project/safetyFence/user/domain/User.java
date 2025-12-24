@@ -5,6 +5,7 @@ import com.project.safetyFence.location.domain.UserLocation;
 import com.project.safetyFence.geofence.domain.Geofence;
 import com.project.safetyFence.log.domain.Log;
 import com.project.safetyFence.calendar.domain.UserEvent;
+import com.project.safetyFence.medication.domain.Medication;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -61,6 +62,10 @@ public class User {
     // 1:N 양방향 관계 - userEvent
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserEvent> userEvents = new ArrayList<>();
+
+    // 1:N 양방향 관계 - Medication
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Medication> medications = new ArrayList<>();
 
     public User(String number, String name, String password, LocalDate birth, String linkCode) {
         this.number = number;
@@ -129,6 +134,18 @@ public class User {
 
     public void removeEvent(UserEvent userEvent) {
         userEvents.remove(userEvent);
+    }
+
+    // Medication 연관관계 편의 메서드
+    public void addMedication(Medication medication) {
+        medications.add(medication);
+        if (medication.getUser() != this) {
+            medication.registerUser(this);
+        }
+    }
+
+    public void removeMedication(Medication medication) {
+        medications.remove(medication);
     }
 
     public void removeLink(Link link) {
