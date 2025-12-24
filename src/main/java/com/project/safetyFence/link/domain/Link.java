@@ -23,6 +23,9 @@ public class Link {
 
     private String relation;
 
+    @Column(nullable = false)
+    private Boolean isPrimary = false;  // 대표 보호자 여부
+
     public Link(User user, String userNumber, String relation) {
         this.user = user;
         this.userNumber = userNumber;
@@ -32,5 +35,10 @@ public class Link {
     // 연관관계 편의 메서드
     public void registerUser(User user) {
         this.user = user;
+    }
+
+    // 대표 보호자 설정
+    public void setPrimary(boolean isPrimary) {
+        this.isPrimary = isPrimary;
     }
 }
