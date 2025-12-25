@@ -3,6 +3,7 @@ package com.project.safetyFence.notification;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
+import com.project.safetyFence.link.LinkRepository;
 import com.project.safetyFence.link.domain.Link;
 import com.project.safetyFence.notification.domain.DeviceToken;
 import com.project.safetyFence.user.UserRepository;
@@ -21,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -36,6 +36,9 @@ class NotificationServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private LinkRepository linkRepository;
 
     @InjectMocks
     private NotificationService notificationService;
@@ -55,10 +58,9 @@ class NotificationServiceTest {
     @DisplayName("보호자에게 알림 전송 성공")
     void sendNotificationToSupporters_shouldSendNotification() {
         // given
-        Link link = new Link(elderUser, supporterUser.getNumber(), "보호자");
-        elderUser.getLinks().add(link);
+        Link link = new Link(supporterUser, elderUser.getNumber(), "보호자");
 
-        when(userRepository.findByNumberWithLinks(elderUser.getNumber())).thenReturn(elderUser);
+        when(linkRepository.findByUserNumber(elderUser.getNumber())).thenReturn(List.of(link));
         when(userRepository.findByNumber(supporterUser.getNumber())).thenReturn(supporterUser);
         when(deviceTokenRepository.findByUser(supporterUser)).thenReturn(List.of(deviceToken));
 
@@ -71,7 +73,7 @@ class NotificationServiceTest {
             notificationService.sendNotificationToSupporters(elderUser, "테스트 제목", "테스트 내용");
 
             // then
-            verify(userRepository).findByNumberWithLinks(elderUser.getNumber());
+            verify(linkRepository).findByUserNumber(elderUser.getNumber());
             verify(userRepository).findByNumber(supporterUser.getNumber());
             verify(deviceTokenRepository).findByUser(supporterUser);
             verify(firebaseMessaging).send(any(Message.class));
@@ -84,7 +86,7 @@ class NotificationServiceTest {
     @DisplayName("보호자가 없으면 알림 전송하지 않음")
     void sendNotificationToSupporters_whenNoSupporters_shouldNotSend() {
         // given
-        when(userRepository.findByNumberWithLinks(elderUser.getNumber())).thenReturn(elderUser);
+        when(linkRepository.findByUserNumber(elderUser.getNumber())).thenReturn(new ArrayList<>());
 
         try (MockedStatic<FirebaseMessaging> firebaseMessagingMock = mockStatic(FirebaseMessaging.class)) {
             FirebaseMessaging firebaseMessaging = mock(FirebaseMessaging.class);
@@ -94,7 +96,7 @@ class NotificationServiceTest {
             notificationService.sendNotificationToSupporters(elderUser, "테스트 제목", "테스트 내용");
 
             // then
-            verify(userRepository).findByNumberWithLinks(elderUser.getNumber());
+            verify(linkRepository).findByUserNumber(elderUser.getNumber());
             verify(firebaseMessaging, never()).send(any(Message.class));
         } catch (FirebaseMessagingException e) {
             throw new RuntimeException(e);
@@ -105,10 +107,9 @@ class NotificationServiceTest {
     @DisplayName("디바이스 토큰이 없으면 알림 전송하지 않음")
     void sendNotificationToSupporters_whenNoDeviceToken_shouldNotSend() {
         // given
-        Link link = new Link(elderUser, supporterUser.getNumber(), "보호자");
-        elderUser.getLinks().add(link);
+        Link link = new Link(supporterUser, elderUser.getNumber(), "보호자");
 
-        when(userRepository.findByNumberWithLinks(elderUser.getNumber())).thenReturn(elderUser);
+        when(linkRepository.findByUserNumber(elderUser.getNumber())).thenReturn(List.of(link));
         when(userRepository.findByNumber(supporterUser.getNumber())).thenReturn(supporterUser);
         when(deviceTokenRepository.findByUser(supporterUser)).thenReturn(new ArrayList<>());
 
@@ -120,6 +121,8 @@ class NotificationServiceTest {
             notificationService.sendNotificationToSupporters(elderUser, "테스트 제목", "테스트 내용");
 
             // then
+            verify(linkRepository).findByUserNumber(elderUser.getNumber());
+            verify(userRepository).findByNumber(supporterUser.getNumber());
             verify(firebaseMessaging, never()).send(any(Message.class));
         } catch (FirebaseMessagingException e) {
             throw new RuntimeException(e);
