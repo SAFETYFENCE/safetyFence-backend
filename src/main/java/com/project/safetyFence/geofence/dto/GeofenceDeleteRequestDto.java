@@ -8,8 +8,10 @@ import lombok.NoArgsConstructor;
 public class GeofenceDeleteRequestDto {
 
     private Long id;
+    private String number;
 
-    public GeofenceDeleteRequestDto(Long id) {
+    public GeofenceDeleteRequestDto(Long id, String number) {
         this.id = id;
+        this.number = number;
     }
 }

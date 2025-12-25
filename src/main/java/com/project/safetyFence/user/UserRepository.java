@@ -26,4 +26,10 @@ public interface UserRepository extends JpaRepository<User, String>{
     @Query("SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.logs WHERE u.number = :number")
     User findByNumberWithCalendarData(@Param("number") String number);
 
+    @Query("SELECT u FROM User u " +
+           "LEFT JOIN FETCH u.userAddress " +
+           "LEFT JOIN FETCH u.geofences " +
+           "WHERE u.number = :number")
+    User findByNumberWithUserDataForMyPage(@Param("number") String number);
+
 }

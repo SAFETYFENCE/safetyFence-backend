@@ -1,5 +1,7 @@
 package com.project.safetyFence.geofence;
 
+import com.project.safetyFence.common.exception.CustomException;
+import com.project.safetyFence.common.exception.ErrorResult;
 import com.project.safetyFence.geofence.domain.Geofence;
 import com.project.safetyFence.geofence.handler.GeofenceEntryHandler;
 import com.project.safetyFence.geofence.service.InitialGeofenceCreator;
@@ -15,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Slf4j
@@ -31,7 +32,7 @@ public class GeofenceService implements InitialGeofenceCreator {
     @Override
     public Geofence createHomeGeofence(UserAddress userAddress) {
         String address = userAddress.getHomeStreetAddress();
-        Coordinate coordinate = geocodingService.convertAddressToCoordinate(address);
+        Coordinate coordinate = convertAddressOrThrow(address);
 
         Geofence geofence = new Geofence(
                 userAddress.getUser(),
@@ -48,7 +49,7 @@ public class GeofenceService implements InitialGeofenceCreator {
     @Override
     public Geofence createCenterGeofence(UserAddress userAddress) {
         String address = userAddress.getCenterStreetAddress();
-        Coordinate coordinate = geocodingService.convertAddressToCoordinate(address);
+        Coordinate coordinate = convertAddressOrThrow(address);
 
         Geofence geofence = new Geofence(
                 userAddress.getUser(),
@@ -73,6 +74,11 @@ public class GeofenceService implements InitialGeofenceCreator {
     public void userFenceIn(String userNumber, Long geofenceId) {
         User user = userRepository.findByNumberWithGeofences(userNumber);
 
+        // 디버깅을 위한 로그
+        List<Long> userGeofenceIds = user.getGeofences().stream()
+                .map(Geofence::getId)
+                .toList();
+
         Geofence geofence = user.getGeofences().stream()
                 .filter(g -> g.getId().equals(geofenceId))
                 .findFirst()
@@ -92,7 +98,7 @@ public class GeofenceService implements InitialGeofenceCreator {
     public void createNewFence(String userNumber, GeofenceRequestDto geofenceRequestDto) {
         User user = userRepository.findByNumber(userNumber);
         String address = geofenceRequestDto.getAddress();
-        Coordinate coordinate = geocodingService.convertAddressToCoordinate(address);
+        Coordinate coordinate = convertAddressOrThrow(address);
 
         Geofence geofence;
         if (geofenceRequestDto.getType() == 0) { // 영구 지오펜스
@@ -106,6 +112,14 @@ public class GeofenceService implements InitialGeofenceCreator {
                     999
             );
         } else { // 일시 지오펜스
+            // "09:00" 형식의 시간을 오늘 날짜와 결합하여 LocalDateTime으로 변환
+            java.time.LocalDate today = java.time.LocalDate.now();
+            java.time.LocalTime startLocalTime = java.time.LocalTime.parse(geofenceRequestDto.getStartTime());
+            java.time.LocalTime endLocalTime = java.time.LocalTime.parse(geofenceRequestDto.getEndTime());
+
+            java.time.LocalDateTime startDateTime = java.time.LocalDateTime.of(today, startLocalTime);
+            java.time.LocalDateTime endDateTime = java.time.LocalDateTime.of(today, endLocalTime);
+
             geofence = new Geofence(
                     user,
                     geofenceRequestDto.getName(),
@@ -113,8 +127,8 @@ public class GeofenceService implements InitialGeofenceCreator {
                     coordinate.getLatitude(),
                     coordinate.getLongitude(),
                     1,
-                    java.time.LocalDateTime.parse(geofenceRequestDto.getStartTime()),
-                    java.time.LocalDateTime.parse(geofenceRequestDto.getEndTime()),
+                    startDateTime,
+                    endDateTime,
                     100
             );
         }
@@ -134,6 +148,15 @@ public class GeofenceService implements InitialGeofenceCreator {
 
         user.removeGeofence(geofenceToDelete);
         // orphanRemoval = true로 트랜잭션 종료 시 자동 삭제
+    }
+
+    private Coordinate convertAddressOrThrow(String address) {
+        try {
+            return geocodingService.convertAddressToCoordinate(address);
+        } catch (RuntimeException e) {
+            log.warn("지오코딩 실패 - address={}", address, e);
+            throw new CustomException(ErrorResult.GEOFENCE_ADDRESS_CONVERSION_FAILED);
+        }
     }
 
 }

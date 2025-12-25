@@ -22,10 +22,11 @@
 ### 주요 기능
 - **실시간 위치 전송**: 2초 주기로 위치 업데이트
 - **선택적 구독**: Link 목록에서 특정 사용자 선택(활성화) 시 해당 사용자의 위치만 수신
-- **2중 보안 체크**: SUBSCRIBE 시점 + @SubscribeMapping 메서드에서 이중 권한 검증
+- **보안 체크**: SUBSCRIBE 시점에 WebSocketAuthInterceptor에서 권한 검증
 - **권한 관리**: 단방향 Link 기반 구독 권한 검증
 - **캐싱**: 최신 위치 1개만 메모리에 저장 (즉시 전송)
-- **조건부 DB 저장**: 100m 이동 또는 1분 경과 시에만 저장
+- **조건부 DB 저장**: 100m 이동 또는 1분 경과 시에만 저장 (전략 패턴 적용)
+- **이벤트 기반 처리**: WebSocketEventListener를 통한 연결/구독/해제 이벤트 처리
 
 ### 시스템 요구사항
 - Spring Boot 3.5.0
@@ -53,7 +54,7 @@
 │         │ GET /links        │ STOMP Protocol     │          │
 └─────────┼───────────────────┼────────────────────┼──────────┘
           │                   │                    │
-          ▼                   ▼                    │
+          ▼                   ▼                    │ 
 ┌─────────────────────────────────────────────────────────────┐
 │                   Spring Boot Server                         │
 │                                                               │
@@ -149,15 +150,16 @@
 - **Lombok** (보일러플레이트 코드 제거)
 
 ### Frontend (권장)
-- **React** (UI)
+- **React Native** (모바일 UI)
 - **@stomp/stompjs** (STOMP 클라이언트)
-- **sockjs-client** (SockJS 폴백)
+- **네이티브 WebSocket** (React Native 기본 지원)
 - **Google Maps API** 또는 **Kakao Map API** (지도 표시)
 
 ### Protocol
 - **WebSocket**: 양방향 실시간 통신
 - **STOMP**: Simple Text Oriented Messaging Protocol
-- **SockJS**: WebSocket 미지원 브라우저 폴백
+- **HTTP POST**: 백그라운드 폴백 메커니즘
+- **Heartbeat**: 10초 주기 연결 상태 확인
 
 ---
 
@@ -191,7 +193,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         // 클라이언트가 구독할 prefix
-        config.enableSimpleBroker("/topic");
+        config.enableSimpleBroker("/topic")
+                .setHeartbeatValue(new long[]{10000, 10000});  // 10초마다 heartbeat (연결 유지)
 
         // 클라이언트가 메시지 보낼 prefix
         config.setApplicationDestinationPrefixes("/app");
@@ -199,10 +202,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // WebSocket 연결 엔드포인트
+        // React Native용 네이티브 WebSocket 엔드포인트
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")  // 개발: 모든 origin 허용
-                .withSockJS();  // SockJS fallback
+                .setAllowedOriginPatterns("*");  // 모든 origin 허용 (SockJS 제거)
     }
 
     @Override
@@ -217,7 +219,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 - `/topic/*`: 구독 엔드포인트 (클라이언트 → 서버)
 - `/app/*`: 발행 엔드포인트 (서버 → 클라이언트)
 - `/ws`: WebSocket 연결 엔드포인트
-- `withSockJS()`: 구형 브라우저 지원
+- **Heartbeat**: 10초마다 연결 상태 확인 (모바일 환경 최적화)
+- **SockJS 제거**: React Native는 네이티브 WebSocket 지원으로 SockJS 불필요
 
 ### 3. 인증 인터셉터
 
@@ -293,7 +296,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
 **역할**:
 - **CONNECT 처리**: WebSocket 연결 시 `userNumber` 헤더 검증 및 세션 저장
-- **SUBSCRIBE 처리**: 구독 시점에 Link 관계 기반 권한 검증 (1차 방어)
+- **SUBSCRIBE 처리**: 구독 시점에 Link 관계 기반 권한 검증
 - **무단 구독 차단**: 권한 없으면 `return null`로 메시지 차단
 - **세션 관리**: 이후 모든 메시지에서 세션으로부터 사용자 식별
 
@@ -377,135 +380,255 @@ public class LocationCacheService {
 
 #### LocationWebSocketController.java
 
-##### 6-1. 위치 전송 처리
+##### 6-1. 위치 전송 처리 (WebSocket)
 ```java
 @MessageMapping("/location")
 public void updateLocation(
         LocationUpdateDto location,
         @Header("simpSessionAttributes") Map<String, Object> sessionAttributes
 ) {
-    // 1. 세션에서 사용자 번호 추출
+    // 세션에서 사용자 번호 추출
     String userNumber = (String) sessionAttributes.get("userNumber");
-    location.setUserNumber(userNumber);
-    location.setTimestamp(System.currentTimeMillis());
 
-    // 2. 캐시 업데이트
-    cacheService.updateLocation(userNumber, location);
+    if (userNumber == null) {
+        log.error("세션에 userNumber가 없습니다.");
+        return;
+    }
 
-    // 3. 구독자들에게 브로드캐스트
-    messagingTemplate.convertAndSend(
-        "/topic/location/" + userNumber,
-        location
-    );
-
-    // 4. 비동기 DB 저장
-    locationService.saveLocationIfNeeded(location);
+    // 공통 처리 로직 호출
+    processLocationUpdate(userNumber, location);
 }
 ```
 
 **동작 흐름**:
 1. 클라이언트가 `/app/location`으로 위치 전송
 2. 서버가 세션에서 `userNumber` 추출
-3. 캐시에 최신 위치 저장
-4. `/topic/location/{userNumber}` 구독자들에게 브로드캐스트
-5. 조건 충족 시 비동기로 DB 저장
+3. 공통 처리 로직으로 위임
 
-##### 6-2. 구독 처리 (2차 권한 검증)
+##### 6-2. 위치 전송 처리 (HTTP POST - 백그라운드 폴백)
 ```java
-@SubscribeMapping("/topic/location/{targetUserNumber}")
-public LocationUpdateDto onSubscribe(
-        @DestinationVariable String targetUserNumber,
-        @Header("simpSessionAttributes") Map<String, Object> sessionAttributes
-) throws AccessDeniedException {
-    // 1. 구독자 번호 추출
-    String subscriberNumber = (String) sessionAttributes.get("userNumber");
-
-    if (subscriberNumber == null) {
-        throw new AccessDeniedException("인증 정보가 없습니다.");
+@PostMapping("/location")
+public ResponseEntity<Void> updateLocationHttp(
+        @RequestBody LocationUpdateDto location,
+        @RequestHeader String userNumber
+) {
+    if (userNumber == null || userNumber.isBlank()) {
+        log.error("HTTP POST 위치 업데이트 실패: userNumber가 없습니다.");
+        return ResponseEntity.badRequest().build();
     }
 
-    // 2. 권한 검증: Link 관계 확인 (2차 방어)
-    if (!linkService.hasLink(subscriberNumber, targetUserNumber)) {
-        throw new AccessDeniedException(
-            "사용자 " + targetUserNumber + "의 위치를 볼 권한이 없습니다."
-        );
-    }
+    log.debug("HTTP POST 위치 업데이트 수신 (백그라운드): userNumber={}, lat={}, lng={}",
+            userNumber, location.getLatitude(), location.getLongitude());
 
-    // 3. 캐시된 최신 위치 즉시 반환
-    return cacheService.getLatestLocation(targetUserNumber);
+    // 공통 처리 로직 호출
+    processLocationUpdate(userNumber, location);
+
+    return ResponseEntity.ok().build();
 }
 ```
 
-**2중 보안 체크 구조**:
+**사용 시나리오**:
+- 모바일 앱이 백그라운드 상태로 전환될 때 WebSocket 연결이 끊김
+- HTTP POST로 주기적 위치 전송 (폴백 메커니즘)
+- 앱이 포그라운드로 복귀하면 다시 WebSocket 연결
+
+##### 6-3. 공통 처리 로직
+```java
+private void processLocationUpdate(String userNumber, LocationUpdateDto location) {
+    // DTO에 사용자 정보 설정
+    location.setUserNumber(userNumber);
+    location.setTimestamp(System.currentTimeMillis());
+
+    // 1. 캐시에 최신 위치 저장
+    cacheService.updateLocation(userNumber, location);
+
+    // 2. 해당 사용자를 구독 중인 모든 클라이언트에게 전송
+    messagingTemplate.convertAndSend(
+        "/topic/location/" + userNumber,
+        location
+    );
+
+    // 3. 조건부 DB 저장 (비동기)
+    locationService.saveLocationIfNeeded(location);
+}
 ```
-구독 요청 → WebSocketAuthInterceptor (1차 방어)
+
+**공통 처리 흐름**:
+1. 사용자 정보 및 타임스탬프 설정
+2. 캐시에 최신 위치 저장
+3. `/topic/location/{userNumber}` 구독자들에게 브로드캐스트
+4. 조건 충족 시 비동기로 DB 저장
+
+##### 6-4. 구독 이벤트 처리 (WebSocketEventListener)
+```java
+@EventListener
+public void handleWebSocketSubscribeListener(SessionSubscribeEvent event) {
+    StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+
+    String destination = headerAccessor.getDestination();
+    Map<String, Object> sessionAttributes = headerAccessor.getSessionAttributes();
+
+    if (destination == null || sessionAttributes == null) {
+        return;
+    }
+
+    // /topic/location/{userNumber} 패턴 매칭
+    Matcher matcher = LOCATION_TOPIC_PATTERN.matcher(destination);
+    if (matcher.matches()) {
+        String targetUserNumber = matcher.group(1);
+        String subscriberNumber = (String) sessionAttributes.get("userNumber");
+
+        log.info("위치 토픽 구독 감지: subscriber={}, target={}, destination={}",
+                subscriberNumber, targetUserNumber, destination);
+
+        // 캐시된 최신 위치 조회
+        LocationUpdateDto cachedLocation = cacheService.getLatestLocation(targetUserNumber);
+
+        if (cachedLocation != null) {
+            // 토픽 구독자들에게 캐시된 위치 전송
+            messagingTemplate.convertAndSend(destination, cachedLocation);
+
+            log.info("캐시된 위치 전송 완료: subscriber={}, target={}, lat={}, lng={}",
+                    subscriberNumber, targetUserNumber,
+                    cachedLocation.getLatitude(), cachedLocation.getLongitude());
+        } else {
+            log.debug("캐시된 위치 없음: target={}", targetUserNumber);
+        }
+    }
+}
+```
+
+**이벤트 기반 구독 처리**:
+```
+구독 요청 → WebSocketAuthInterceptor (권한 검증)
                 ↓ 권한 체크 통과
-            @SubscribeMapping (2차 방어)
-                ↓ 권한 재확인
-            최신 위치 반환
+            WebSocketEventListener (SessionSubscribeEvent)
+                ↓ 캐시 조회
+            최신 위치 전송 (있는 경우)
 ```
 
 **권한 검증 로직**:
 ```
 A가 B의 위치를 구독하려면:
-→ 1차: WebSocketAuthInterceptor에서 SUBSCRIBE 명령 가로채기
-→ 2차: @SubscribeMapping 메서드에서 재확인 (방어적 프로그래밍)
+→ WebSocketAuthInterceptor에서 SUBSCRIBE 명령 가로채기
 → Link 테이블에서 A가 B를 Link로 등록했는지 확인
+→ 권한 확인 후 WebSocketEventListener가 캐시된 위치 전송
 → 단방향 확인 (B가 A를 등록했는지는 무관)
 ```
 
 **즉시 응답**:
-- 새 구독자에게 캐시된 최신 위치 즉시 전송
+- 구독 성공 시 캐시된 최신 위치를 즉시 전송
 - 대기 없이 바로 지도에 마커 표시 가능
+- 캐시에 위치가 없으면 다음 업데이트까지 대기
 
-**보안 강점**:
-- 1차 방어: 프로토콜 레벨에서 무단 구독 차단
-- 2차 방어: 애플리케이션 레벨에서 권한 재확인
-- 방어적 프로그래밍: 인터셉터 우회 시나리오에도 안전
+**이벤트 처리 장점**:
+- 권한 검증과 위치 전송 로직 분리
+- 이벤트 기반으로 확장 가능한 구조
+- SessionSubscribeEvent를 활용한 깔끔한 처리
 
 ### 7. 비동기 DB 저장
 
 #### LocationService.java
 
-##### 7-1. 조건부 저장 로직
+##### 7-1. 조건부 저장 로직 (전략 패턴 적용)
+
+**LocationService.java**:
 ```java
 @Async
 @Transactional
 public void saveLocationIfNeeded(LocationUpdateDto locationDto) {
-    User user = userRepository.findByNumber(locationDto.getUserNumber());
+    try {
+        // 사용자 조회
+        User user = userRepository.findByNumber(locationDto.getUserNumber());
+        if (user == null) {
+            log.warn("사용자를 찾을 수 없습니다: userNumber={}", locationDto.getUserNumber());
+            return;
+        }
 
-    // 이전 위치 조회
-    Optional<UserLocation> previousLocationOpt =
-        userLocationRepository.findLatestByUser(user);
+        // 이전 위치 조회
+        Optional<UserLocation> previousLocationOpt = userLocationRepository.findLatestByUser(user);
+        UserLocation previousLocation = previousLocationOpt.orElse(null);
 
-    // 1️⃣ 이전 위치 없으면 무조건 저장
-    if (previousLocationOpt.isEmpty()) {
-        saveLocation(user, locationDto);
-        return;
+        // 전략 패턴: 저장 여부 판단을 전략 객체에 위임
+        if (locationSaveStrategy.shouldSave(previousLocation, locationDto)) {
+            saveLocation(user, locationDto);
+        }
+
+    } catch (Exception e) {
+        log.error("위치 저장 중 오류 발생: userNumber={}", locationDto.getUserNumber(), e);
     }
+}
 
-    UserLocation previousLocation = previousLocationOpt.get();
-
-    // 2️⃣ 거리 계산 (Haversine 공식)
-    double distance = calculateDistance(
-        previousLocation.getLatitude().doubleValue(),
-        previousLocation.getLongitude().doubleValue(),
-        locationDto.getLatitude(),
-        locationDto.getLongitude()
+private void saveLocation(User user, LocationUpdateDto locationDto) {
+    UserLocation userLocation = new UserLocation(
+            user,
+            BigDecimal.valueOf(locationDto.getLatitude()),
+            BigDecimal.valueOf(locationDto.getLongitude())
     );
 
-    // 3️⃣ 시간 차이 계산
-    long timeDiff = locationDto.getTimestamp() -
-        previousLocation.getSavedTime()
-            .atZone(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli();
+    user.addUserLocation(userLocation);
+}
+```
 
-    // 4️⃣ 저장 조건 확인
-    if (distance >= 100.0) {  // 100m 이상 이동
-        saveLocation(user, locationDto);
-    } else if (timeDiff >= 60_000) {  // 1분 이상 경과
-        saveLocation(user, locationDto);
+**LocationSaveStrategy.java** (인터페이스):
+```java
+public interface LocationSaveStrategy {
+    boolean shouldSave(UserLocation previous, LocationUpdateDto current);
+}
+```
+
+**DistanceBasedSaveStrategy.java** (구현체):
+```java
+@Component
+public class DistanceBasedSaveStrategy implements LocationSaveStrategy {
+
+    private static final double EARTH_RADIUS = 6371000; // 지구 반지름 (미터)
+    private static final double MIN_DISTANCE_METERS = 100.0;  // 최소 이동 거리
+    private static final long MIN_TIME_DIFF_MILLIS = 60_000;  // 최소 시간 차이 (1분)
+
+    @Override
+    public boolean shouldSave(UserLocation previous, LocationUpdateDto current) {
+        // 1️⃣ 이전 위치 없으면 무조건 저장
+        if (previous == null) {
+            log.info("첫 위치 저장: userNumber={}", current.getUserNumber());
+            return true;
+        }
+
+        // 2️⃣ 거리 계산 (Haversine 공식)
+        double distance = calculateDistance(
+                previous.getLatitude(),
+                previous.getLongitude(),
+                current.getLatitude(),
+                current.getLongitude()
+        );
+
+        // 3️⃣ 시간 차이 계산
+        long timeDiff = current.getTimestamp() -
+                previous.getSavedTime().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+
+        // 4️⃣ 거리 조건 확인
+        if (distance >= MIN_DISTANCE_METERS) {
+            log.info("거리 조건 충족하여 저장: userNumber={}, distance={}m",
+                    current.getUserNumber(), String.format("%.2f", distance));
+            return true;
+        }
+
+        // 5️⃣ 시간 조건 확인
+        if (timeDiff >= MIN_TIME_DIFF_MILLIS) {
+            log.info("시간 조건 충족하여 저장: userNumber={}, timeDiff={}초",
+                    current.getUserNumber(), timeDiff / 1000);
+            return true;
+        }
+
+        // 조건 미충족
+        log.debug("저장 조건 미충족: userNumber={}, distance={}m, timeDiff={}초",
+                current.getUserNumber(), String.format("%.2f", distance), timeDiff / 1000);
+        return false;
+    }
+
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        // Haversine 공식 구현
+        // (코드는 아래 섹션 7-2 참조)
     }
 }
 ```
@@ -525,21 +648,15 @@ public void saveLocationIfNeeded(LocationUpdateDto locationDto) {
 절감율: 약 96%
 ```
 
-##### 7-2. Haversine 거리 계산
+##### 7-2. Haversine 거리 계산 (DistanceBasedSaveStrategy 내부)
 ```java
-private double calculateDistance(
-    double lat1, double lon1,
-    double lat2, double lon2
-) {
-    final double EARTH_RADIUS = 6371000; // 지구 반지름 (미터)
-
+private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
     double dLat = Math.toRadians(lat2 - lat1);
     double dLon = Math.toRadians(lon2 - lon1);
 
-    double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-            + Math.cos(Math.toRadians(lat1))
-            * Math.cos(Math.toRadians(lat2))
-            * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
 
     double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
@@ -551,6 +668,12 @@ private double calculateDistance(
 - 구면 상 두 점 사이의 최단 거리 계산
 - GPS 좌표 간 거리 측정에 최적
 - 오차 범위: ±0.5% (실용적으로 충분)
+
+**전략 패턴의 장점**:
+- **확장성**: 새로운 저장 전략 추가 가능 (예: TimeBasedSaveStrategy, GeofenceBasedSaveStrategy)
+- **테스트 용이성**: 전략 객체를 Mock으로 대체하여 독립적인 테스트 가능
+- **유지보수성**: 저장 로직 변경 시 전략 객체만 수정하면 됨
+- **단일 책임 원칙**: LocationService는 전략 실행만 담당, 저장 판단 로직은 전략 객체가 담당
 
 ### 8. 구독 전략
 
@@ -605,7 +728,7 @@ selectUser(userNumber) {
             updateMapMarker(JSON.parse(message.body));
         }
     );
-    // ✅ @SubscribeMapping이 즉시 최신 위치 반환 (~200ms)
+    // ✅ WebSocketEventListener가 즉시 최신 위치 반환 (~200ms)
 }
 ```
 
@@ -622,7 +745,7 @@ selectUser(userNumber) {
 1. **확장성**: Link가 늘어날수록 전체 구독 방식은 감당 불가
 2. **리소스 효율**: 실제로 보는 사용자 1명의 위치만 받으면 됨
 3. **실무 표준**: 대부분의 실시간 위치 서비스 채택
-4. **@SubscribeMapping 장점**: 구독 즉시 최신 위치 받아 지연 거의 없음
+4. **이벤트 처리 장점**: WebSocketEventListener가 구독 즉시 최신 위치 전송하여 지연 거의 없음
 
 **성능 비교** (1000명, Link 평균 20명):
 ```
@@ -728,14 +851,14 @@ React (A)                           Server
    |   /topic/location/B              |
    |                                   |
    |         [WebSocketAuthInterceptor - SUBSCRIBE]
-   |         1차 권한 체크: hasLink(A, B)
+   |         권한 체크: hasLink(A, B)
    |         - 권한 없으면 return null (차단)
    |         - 권한 있으면 통과
    |                                   |
-   |         [LocationWebSocketController]
-   |         @SubscribeMapping 메서드 호출
-   |         2차 권한 체크: hasLink(A, B) 재확인
+   |         [WebSocketEventListener]
+   |         SessionSubscribeEvent 처리
    |         - 캐시된 B의 최신 위치 조회
+   |         - 즉시 전송 (있는 경우)
    |                                   |
    |<-- SUBSCRIBED -------------------|
    |<-- MESSAGE ----------------------|  ← 캐시된 B의 최신 위치
@@ -745,9 +868,9 @@ React (A)                           Server
    |                                   |
 ```
 
-**2중 보안 체크**:
-1. **1차 방어 (WebSocketAuthInterceptor)**: STOMP 프로토콜 레벨에서 SUBSCRIBE 명령 차단
-2. **2차 방어 (@SubscribeMapping)**: 애플리케이션 레벨에서 권한 재확인
+**보안 체크 및 이벤트 처리**:
+1. **권한 검증 (WebSocketAuthInterceptor)**: STOMP 프로토콜 레벨에서 SUBSCRIBE 명령 검증
+2. **위치 전송 (WebSocketEventListener)**: 이벤트 기반으로 캐시된 위치 즉시 전송
 
 **WebSocket 연결 코드** (JavaScript):
 ```javascript
@@ -834,11 +957,11 @@ React (A)                      Server
    |   /topic/location/C          |
    |                              |
    |         [WebSocketAuthInterceptor]
-   |         1차 권한 체크: hasLink(A, C)
+   |         권한 체크: hasLink(A, C)
    |                              |
-   |         [@SubscribeMapping]
-   |         2차 권한 체크: hasLink(A, C)
-   |         캐시에서 C의 최신 위치 조회
+   |         [WebSocketEventListener]
+   |         SessionSubscribeEvent 처리
+   |         캐시에서 C의 최신 위치 조회 및 전송
    |                              |
    |<-- SUBSCRIBED ---------------|
    |<-- C의 최신 위치 ------------|
@@ -850,6 +973,7 @@ React (A)                      Server
 - 사용자 전환 시 기존 구독 해제 → 새 사용자 구독
 - 서버는 사용자당 구독 1개만 유지
 - 200ms 내에 최신 위치 받아서 지도 업데이트
+- WebSocketEventListener가 이벤트 기반으로 캐시된 위치 즉시 전송
 
 **구독 전환 코드**:
 ```javascript
@@ -900,7 +1024,7 @@ const client = new Client({
 
 ---
 
-#### 2. 위치 전송
+#### 2. 위치 전송 (WebSocket)
 
 ```
 SEND /app/location
@@ -930,6 +1054,48 @@ SEND /app/location
 **주의사항**:
 - `userNumber`는 클라이언트가 보내지 않음 (서버가 세션에서 자동 추출)
 - `timestamp`도 서버에서 자동 설정
+
+---
+
+#### 2-1. 위치 전송 (HTTP POST - 백그라운드 폴백)
+
+```
+POST /location
+```
+
+**Request Headers**:
+| Header | Type | Required | Description |
+|--------|------|----------|-------------|
+| userNumber | String | ✅ Yes | 사용자 번호 |
+
+**Request Body**:
+```json
+{
+  "latitude": 37.123456,
+  "longitude": 127.123456
+}
+```
+
+**Parameters**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| latitude | Double | ✅ Yes | 위도 (-90 ~ 90) |
+| longitude | Double | ✅ Yes | 경도 (-180 ~ 180) |
+
+**사용 시나리오**:
+- 모바일 앱이 백그라운드 상태일 때 WebSocket 연결이 끊김
+- HTTP POST로 위치 전송 (폴백 메커니즘)
+- 포그라운드 복귀 시 WebSocket 재연결
+
+**Response**:
+- **200 OK**: 위치 업데이트 성공
+- **400 Bad Request**: userNumber 누락
+
+**처리 과정**:
+1. 헤더에서 `userNumber` 추출
+2. WebSocket과 동일한 공통 처리 로직 실행
+3. 캐시 업데이트 및 브로드캐스트
+4. 조건부 DB 저장
 
 ---
 
@@ -1003,18 +1169,18 @@ Headers:
 
 ## Frontend 통합 가이드
 
-### 1. 설치
+### 1. 설치 (React Native)
 
 ```bash
-npm install @stomp/stompjs sockjs-client
+npm install @stomp/stompjs
+# React Native는 네이티브 WebSocket을 기본 지원하므로 sockjs-client 불필요
 ```
 
-### 2. WebSocket 서비스 구현
+### 2. WebSocket 서비스 구현 (React Native)
 
 ```javascript
 // locationWebSocket.js
 import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 
 class LocationWebSocketService {
   constructor() {
@@ -1023,17 +1189,19 @@ class LocationWebSocketService {
   }
 
   /**
-   * WebSocket 연결
+   * WebSocket 연결 (React Native 네이티브 WebSocket 사용)
    */
   connect(userNumber, onConnected) {
-    const socket = new SockJS('http://localhost:8080/ws');
-
     this.client = new Client({
-      webSocketFactory: () => socket,
+      brokerURL: 'ws://localhost:8080/ws',  // React Native는 네이티브 WebSocket 사용
 
       connectHeaders: {
         userNumber: userNumber  // 인증 정보
       },
+
+      // Heartbeat 설정 (서버와 동일하게 10초)
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
 
       onConnect: () => {
         console.log('✅ WebSocket 연결 성공');
@@ -1046,10 +1214,54 @@ class LocationWebSocketService {
 
       onWebSocketError: (event) => {
         console.error('❌ WebSocket 에러:', event);
+      },
+
+      onWebSocketClose: () => {
+        console.warn('⚠️ WebSocket 연결 종료');
+        // 백그라운드 폴백 로직 실행
+        this.startHttpFallback(userNumber);
       }
     });
 
     this.client.activate();
+  }
+
+  /**
+   * 백그라운드 폴백: HTTP POST로 위치 전송
+   */
+  startHttpFallback(userNumber) {
+    if (this.fallbackInterval) {
+      clearInterval(this.fallbackInterval);
+    }
+
+    this.fallbackInterval = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          fetch('http://localhost:8080/location', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'userNumber': userNumber
+            },
+            body: JSON.stringify({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            })
+          }).catch(err => console.error('HTTP POST 실패:', err));
+        },
+        (error) => console.error('위치 조회 실패:', error)
+      );
+    }, 2000);
+  }
+
+  /**
+   * 백그라운드 폴백 중지
+   */
+  stopHttpFallback() {
+    if (this.fallbackInterval) {
+      clearInterval(this.fallbackInterval);
+      this.fallbackInterval = null;
+    }
   }
 
   /**
@@ -1108,6 +1320,7 @@ class LocationWebSocketService {
    */
   disconnect() {
     this.unsubscribe();
+    this.stopHttpFallback();  // 백그라운드 폴백 중지
     this.client?.deactivate();
     console.log('🔌 WebSocket 연결 종료');
   }
@@ -1321,19 +1534,20 @@ cd /Users/chungjongin/Desktop/forProject/safetyFence
 
 ### 2. WebSocket 연결 테스트
 
-#### Chrome DevTools Console
+#### Chrome DevTools Console (브라우저 테스트)
 ```javascript
-// 1. SockJS + STOMP 라이브러리 CDN 추가 (HTML)
-// <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+// 1. STOMP 라이브러리 CDN 추가 (HTML)
 // <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7/bundles/stomp.umd.min.js"></script>
 
-// 2. 연결 테스트
-const socket = new SockJS('http://localhost:8080/ws');
-const client = StompJs.Stomp.over(() => socket);
-
-client.connect(
-  { userNumber: 'testUser123' },
-  () => {
+// 2. 연결 테스트 (네이티브 WebSocket 사용)
+const client = new StompJs.Client({
+  brokerURL: 'ws://localhost:8080/ws',
+  connectHeaders: {
+    userNumber: 'testUser123'
+  },
+  heartbeatIncoming: 10000,
+  heartbeatOutgoing: 10000,
+  onConnect: () => {
     console.log('✅ 연결 성공!');
 
     // 구독 테스트
@@ -1350,10 +1564,36 @@ client.connect(
       })
     });
   },
-  (error) => {
-    console.error('❌ 연결 실패:', error);
+  onStompError: (frame) => {
+    console.error('❌ STOMP 에러:', frame.headers['message']);
   }
-);
+});
+
+client.activate();
+```
+
+#### HTTP POST 테스트 (백그라운드 폴백)
+```javascript
+// 백그라운드 상태 시뮬레이션
+fetch('http://localhost:8080/location', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'userNumber': 'testUser123'
+  },
+  body: JSON.stringify({
+    latitude: 37.123456,
+    longitude: 127.123456
+  })
+})
+.then(response => {
+  if (response.ok) {
+    console.log('✅ HTTP POST 위치 전송 성공');
+  } else {
+    console.error('❌ HTTP POST 실패:', response.status);
+  }
+})
+.catch(error => console.error('❌ 네트워크 에러:', error));
 ```
 
 ### 3. Postman 테스트
@@ -2008,11 +2248,14 @@ public void checkGeofenceEntry(LocationUpdateDto location) {
 
 ### 핵심 특징
 - 🚀 **실시간**: 2초 주기 위치 업데이트
-- 🔒 **보안**: 2중 권한 검증 (SUBSCRIBE 시점 + @SubscribeMapping)
+- 🔒 **보안**: WebSocketAuthInterceptor에서 SUBSCRIBE 시점 권한 검증
 - 🎯 **활성화 구독**: 선택한 사용자만 구독 (리소스 95% 절감)
 - ⚡ **성능**: Caffeine 캐시로 즉시 응답 (~200ms)
-- 💾 **효율**: 조건부 DB 저장 (96% 절감)
+- 💾 **효율**: 조건부 DB 저장 (96% 절감, 전략 패턴 적용)
 - 🔄 **확장성**: 수평 확장 가능 (Redis Pub/Sub)
+- 📡 **이벤트 기반**: WebSocketEventListener를 통한 연결/구독/해제 이벤트 처리
+- 📱 **모바일 최적화**: React Native 네이티브 WebSocket + Heartbeat (10초 주기)
+- 🔌 **백그라운드 폴백**: HTTP POST 메커니즘으로 백그라운드 상태에서도 위치 전송
 
 ### 다음 단계
 1. **Frontend 구현**: React + @stomp/stompjs

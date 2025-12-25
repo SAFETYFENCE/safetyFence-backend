@@ -1,8 +1,9 @@
 # Safety Fence API 명세서
 
 > **프로젝트**: Safety Fence - 실시간 위치 추적 및 지오펜스 시스템
-> **버전**: 1.0
+> **버전**: 1.2
 > **작성일**: 2025-10-25
+> **최종 수정**: 2025-12-24
 
 ## 목차
 1. [인증 및 사용자 관리 API](#1-인증-및-사용자-관리-api)
@@ -11,7 +12,8 @@
 4. [로그 조회 API](#4-로그-조회-api)
 5. [캘린더 API](#5-캘린더-api)
 6. [마이페이지 API](#6-마이페이지-api)
-7. [WebSocket 실시간 위치 공유 API](#7-websocket-실시간-위치-공유-api)
+7. [알림 (Notification) API](#7-알림-notification-api)
+8. [WebSocket 실시간 위치 공유 API](#8-websocket-실시간-위치-공유-api)
 
 ---
 
@@ -165,7 +167,7 @@ const Login = () => {
       alert(`${name}님, 환영합니다!`);
 
       // 이후 모든 요청에 헤더 추가
-      axios.defaults.headers.common['apiKey'] = apiKey;
+      axios.defaults.headers.common['X-API-Key'] = apiKey;
 
     } catch (error) {
       console.error('로그인 실패:', error.response?.data);
@@ -205,7 +207,7 @@ const Login = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Response**:
@@ -240,7 +242,7 @@ const LinkList = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.get('/link/list', {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
       setLinks(response.data);
     } catch (error) {
@@ -273,7 +275,7 @@ const LinkList = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -306,7 +308,7 @@ const AddLink = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.post('/link/addUser', linkData, {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
 
       alert('링크가 추가되었습니다.');
@@ -348,7 +350,7 @@ const AddLink = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -375,7 +377,7 @@ const DeleteLink = ({ userNumber, onDeleted }) => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       await axios.delete('/link/deleteUser', {
-        headers: { apiKey },
+        headers: { 'X-API-Key': apiKey },
         data: { number: userNumber }
       });
 
@@ -406,7 +408,7 @@ const DeleteLink = ({ userNumber, onDeleted }) => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -467,7 +469,7 @@ const GeofenceList = () => {
 
       const response = await axios.post('/geofence/list',
         { number: userNumber },
-        { headers: { apiKey } }
+        { headers: { 'X-API-Key': apiKey } }
       );
 
       setGeofences(response.data);
@@ -508,7 +510,7 @@ const GeofenceList = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -571,7 +573,7 @@ const CreateGeofence = () => {
         : fenceData;
 
       const response = await axios.post('/geofence/newFence', requestData, {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
 
       console.log('지오펜스 생성 성공:', response.data);
@@ -636,7 +638,7 @@ const CreateGeofence = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -663,7 +665,7 @@ const RecordFenceEntry = () => {
 
       await axios.post('/geofence/userFenceIn',
         { geofenceId },
-        { headers: { apiKey } }
+        { headers: { 'X-API-Key': apiKey } }
       );
 
       console.log(`지오펜스 ${geofenceId} 진입 기록됨`);
@@ -714,7 +716,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -742,7 +744,7 @@ const DeleteGeofence = ({ geofenceId, onDeleted }) => {
       const apiKey = localStorage.getItem('apiKey');
 
       await axios.delete('/geofence/deleteFence', {
-        headers: { apiKey },
+        headers: { 'X-API-Key': apiKey },
         data: { id: geofenceId }
       });
 
@@ -773,7 +775,7 @@ const DeleteGeofence = ({ geofenceId, onDeleted }) => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Response**:
@@ -810,7 +812,7 @@ const LogHistory = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.get('/logs', {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
       setLogs(response.data);
     } catch (error) {
@@ -856,7 +858,7 @@ const LogHistory = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Query Parameters**:
@@ -911,7 +913,7 @@ const Calendar = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.get('/calendar/userData', {
-        headers: { apiKey },
+        headers: { 'X-API-Key': apiKey },
         params: { date }
       });
       setDayData(response.data);
@@ -986,7 +988,7 @@ const Calendar = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -1022,7 +1024,7 @@ const AddEvent = () => {
       const apiKey = localStorage.getItem('apiKey');
 
       await axios.post('/calendar/addEvent', eventData, {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
 
       alert('이벤트가 추가되었습니다.');
@@ -1068,7 +1070,7 @@ const AddEvent = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Query Parameters**:
@@ -1097,7 +1099,7 @@ const DeleteEvent = ({ eventId, onDeleted }) => {
       const apiKey = localStorage.getItem('apiKey');
 
       await axios.delete('/calendar/deleteEvent', {
-        headers: { apiKey },
+        headers: { 'X-API-Key': apiKey },
         params: { userEventId: eventId }
       });
 
@@ -1128,7 +1130,7 @@ const DeleteEvent = ({ eventId, onDeleted }) => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Response**:
@@ -1168,7 +1170,7 @@ const MyPage = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.get('/get/myPageData', {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
       setUserData(response.data);
     } catch (error) {
@@ -1214,7 +1216,7 @@ const MyPage = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -1257,7 +1259,7 @@ const ChangePassword = () => {
         currentPassword: passwords.currentPassword,
         newPassword: passwords.newPassword
       }, {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
 
       alert('비밀번호가 변경되었습니다.');
@@ -1305,7 +1307,7 @@ const ChangePassword = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -1341,7 +1343,7 @@ const UpdateHomeAddress = () => {
       const apiKey = localStorage.getItem('apiKey');
 
       await axios.patch('/mypage/homeAddress', address, {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
 
       alert('집 주소가 변경되었습니다.');
@@ -1388,7 +1390,7 @@ const UpdateHomeAddress = () => {
 
 **Headers**:
 ```
-apiKey: your-api-key
+X-API-Key: your-api-key
 ```
 
 **Request Body**:
@@ -1422,7 +1424,7 @@ const UpdateCenterAddress = () => {
       const apiKey = localStorage.getItem('apiKey');
 
       await axios.patch('/mypage/centerAddress', centerAddress, {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
 
       alert('센터 주소가 변경되었습니다.');
@@ -1455,7 +1457,341 @@ const UpdateCenterAddress = () => {
 
 ---
 
-## 7. WebSocket 실시간 위치 공유 API
+## 7. 알림 (Notification) API
+
+### 7.1 디바이스 토큰 등록
+
+**Endpoint**: `POST /api/device-token/register`
+
+**Description**: FCM 푸시 알림을 위한 디바이스 토큰을 등록합니다.
+
+**Request Body**:
+```json
+{
+  "userNumber": "01012345678",
+  "token": "fcm_device_token_string_here",
+  "deviceType": "android"
+}
+```
+
+**Request 필드**:
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| userNumber | String | ✅ | 사용자 전화번호 |
+| token | String | ✅ | FCM 디바이스 토큰 |
+| deviceType | String | ✅ | "android" 또는 "ios" |
+
+**Response**:
+```json
+"토큰 등록 성공"
+```
+
+**Error Response**:
+```json
+"토큰 등록 실패: {error_message}"
+```
+
+**React Native 예시**:
+```jsx
+import messaging from '@react-native-firebase/messaging';
+import axios from 'axios';
+
+const RegisterDeviceToken = () => {
+  const registerToken = async () => {
+    try {
+      // FCM 토큰 가져오기
+      const fcmToken = await messaging().getToken();
+
+      const userNumber = await AsyncStorage.getItem('userNumber');
+      const deviceType = Platform.OS; // 'android' or 'ios'
+
+      // 서버에 토큰 등록
+      const response = await axios.post('/api/device-token/register', {
+        userNumber: userNumber,
+        token: fcmToken,
+        deviceType: deviceType
+      });
+
+      console.log('✅ 디바이스 토큰 등록 성공:', response.data);
+
+    } catch (error) {
+      console.error('❌ 디바이스 토큰 등록 실패:', error);
+    }
+  };
+
+  useEffect(() => {
+    registerToken();
+
+    // 토큰 갱신 감지
+    const unsubscribe = messaging().onTokenRefresh(async (newToken) => {
+      console.log('🔄 FCM 토큰 갱신됨');
+      // 새 토큰으로 재등록
+      await registerToken();
+    });
+
+    return unsubscribe;
+  }, []);
+
+  return null;
+};
+```
+
+---
+
+### 7.2 디바이스 토큰 삭제
+
+**Endpoint**: `DELETE /api/device-token?token={fcm_token}`
+
+**Description**: 로그아웃 시 디바이스 토큰을 삭제합니다.
+
+**Query Parameters**:
+| 파라미터 | 타입 | 필수 | 설명 |
+|---------|------|------|------|
+| token | String | ✅ | 삭제할 FCM 토큰 |
+
+**Response**:
+```json
+"토큰 삭제 성공"
+```
+
+**React Native 예시**:
+```jsx
+const LogoutAndDeleteToken = () => {
+  const handleLogout = async () => {
+    try {
+      const fcmToken = await messaging().getToken();
+
+      // 서버에서 토큰 삭제
+      await axios.delete(`/api/device-token`, {
+        params: { token: fcmToken }
+      });
+
+      // 로컬 스토리지 클리어
+      await AsyncStorage.clear();
+
+      console.log('✅ 로그아웃 완료');
+
+      // 로그인 화면으로 이동
+      navigation.navigate('Login');
+
+    } catch (error) {
+      console.error('❌ 로그아웃 실패:', error);
+    }
+  };
+
+  return (
+    <TouchableOpacity onPress={handleLogout}>
+      <Text>로그아웃</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+---
+
+### 7.3 긴급 알림 전송
+
+**Endpoint**: `POST /notification/emergency`
+
+**Description**: 연결된 모든 사용자에게 긴급 알림을 전송합니다.
+
+**Request Body**:
+```json
+{
+  "userNumber": "01012345678"
+}
+```
+
+**Response**:
+```json
+"긴급 알림이 전송되었습니다."
+```
+
+**Error Response**:
+```json
+"사용자를 찾을 수 없습니다."
+```
+
+**React Native 예시**:
+```jsx
+import { Alert } from 'react-native';
+import axios from 'axios';
+
+const EmergencyButton = () => {
+  const [isSending, setIsSending] = useState(false);
+
+  const sendEmergencyAlert = async () => {
+    Alert.alert(
+      '긴급 알림',
+      '연결된 모든 사용자에게 긴급 알림을 보내시겠습니까?',
+      [
+        {
+          text: '취소',
+          style: 'cancel'
+        },
+        {
+          text: '전송',
+          onPress: async () => {
+            try {
+              setIsSending(true);
+
+              const userNumber = await AsyncStorage.getItem('userNumber');
+
+              const response = await axios.post('/notification/emergency', {
+                userNumber: userNumber
+              });
+
+              console.log('✅ 긴급 알림 전송:', response.data);
+
+              Alert.alert(
+                '전송 완료',
+                '연결된 사용자들에게 긴급 알림이 전송되었습니다.',
+                [{ text: '확인' }]
+              );
+
+            } catch (error) {
+              console.error('❌ 긴급 알림 전송 실패:', error);
+              Alert.alert('오류', '긴급 알림 전송에 실패했습니다.');
+            } finally {
+              setIsSending(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  return (
+    <TouchableOpacity
+      style={{
+        backgroundColor: '#ff0000',
+        padding: 20,
+        borderRadius: 50,
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+      onPress={sendEmergencyAlert}
+      disabled={isSending}
+    >
+      <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
+        {isSending ? '전송 중...' : '🚨 긴급 알림'}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+---
+
+### 7.4 푸시 알림 수신 처리
+
+**React Native 예시 (포그라운드 + 백그라운드)**:
+```jsx
+import messaging from '@react-native-firebase/messaging';
+import { useEffect } from 'react';
+import { Alert } from 'react-native';
+
+const NotificationHandler = () => {
+  useEffect(() => {
+    // 포그라운드 알림 수신
+    const unsubscribeForeground = messaging().onMessage(async (remoteMessage) => {
+      console.log('📬 포그라운드 알림 수신:', remoteMessage);
+
+      Alert.alert(
+        remoteMessage.notification?.title || '알림',
+        remoteMessage.notification?.body || '',
+        [{ text: '확인' }]
+      );
+    });
+
+    // 백그라운드 알림 클릭 처리
+    messaging().onNotificationOpenedApp((remoteMessage) => {
+      console.log('📬 백그라운드 알림 클릭:', remoteMessage);
+
+      // 알림 타입에 따라 화면 이동
+      if (remoteMessage.data?.type === 'emergency') {
+        navigation.navigate('EmergencyDetail', {
+          userNumber: remoteMessage.data.userNumber
+        });
+      }
+    });
+
+    // 앱이 종료된 상태에서 알림 클릭
+    messaging()
+      .getInitialNotification()
+      .then((remoteMessage) => {
+        if (remoteMessage) {
+          console.log('📬 앱 종료 상태 알림 클릭:', remoteMessage);
+
+          // 알림으로 앱 실행 시 처리
+          if (remoteMessage.data?.type === 'emergency') {
+            navigation.navigate('EmergencyDetail', {
+              userNumber: remoteMessage.data.userNumber
+            });
+          }
+        }
+      });
+
+    return () => {
+      unsubscribeForeground();
+    };
+  }, []);
+
+  return null;
+};
+
+export default NotificationHandler;
+```
+
+---
+
+### 7.5 알림 권한 요청
+
+**React Native 예시**:
+```jsx
+import messaging from '@react-native-firebase/messaging';
+import { Alert, Platform } from 'react-native';
+
+const RequestNotificationPermission = () => {
+  const requestPermission = async () => {
+    try {
+      // iOS는 권한 요청 필요
+      if (Platform.OS === 'ios') {
+        const authStatus = await messaging().requestPermission();
+        const enabled =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+        if (!enabled) {
+          Alert.alert(
+            '알림 권한',
+            '알림을 받으려면 설정에서 알림 권한을 허용해주세요.',
+            [{ text: '확인' }]
+          );
+          return false;
+        }
+      }
+
+      console.log('✅ 알림 권한 승인됨');
+      return true;
+
+    } catch (error) {
+      console.error('❌ 알림 권한 요청 실패:', error);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    requestPermission();
+  }, []);
+
+  return null;
+};
+```
+
+---
+
+## 8. WebSocket 실시간 위치 공유 API
 
 ### 7.1 WebSocket 개요
 
@@ -1754,7 +2090,7 @@ const MultipleLocationTracker = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.get('/link/list', {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
       setFriends(response.data);
     } catch (error) {
@@ -1886,7 +2222,7 @@ const RealTimeMapTracker = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.get('/link/list', {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
       setFriends(response.data);
     } catch (error) {
@@ -2022,7 +2358,7 @@ const CompleteLocationApp = () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
       const response = await axios.get('/link/list', {
-        headers: { apiKey }
+        headers: { 'X-API-Key': apiKey }
       });
       setFriends(response.data);
     } catch (error) {
@@ -2342,7 +2678,7 @@ const CompleteFlow = () => {
       localStorage.setItem('userName', name);
 
       // Axios 기본 헤더 설정
-      axios.defaults.headers.common['apiKey'] = apiKey;
+      axios.defaults.headers.common['X-API-Key'] = apiKey;
 
       return true;
     } catch (error) {
@@ -2445,7 +2781,7 @@ instance.interceptors.request.use(
   config => {
     const apiKey = localStorage.getItem('apiKey');
     if (apiKey) {
-      config.headers.apiKey = apiKey;
+      config.headers['X-API-Key'] = apiKey;
     }
     return config;
   },
@@ -2467,9 +2803,25 @@ export default instance;
 
 ## 문서 정보
 
-- **마지막 업데이트**: 2025-10-25
-- **API 버전**: 1.0
+- **마지막 업데이트**: 2025-01-06
+- **API 버전**: 1.1
 - **작성자**: Safety Fence 개발팀
 - **문의**: 개발팀 이메일
+
+---
+
+## 📝 변경 이력
+
+### v1.1 (2025-01-06)
+- **중요**: 인증 헤더 이름 수정 - `apiKey` → `X-API-Key`
+- 백엔드 AuthInterceptor 구현에 맞춰 정확한 헤더 이름으로 변경
+- 모든 API 예시 코드에서 헤더 사용법 업데이트
+- Axios 인터셉터 예시 코드 수정
+
+### v1.0 (2025-10-25)
+- 최초 작성
+- 전체 API 엔드포인트 문서화
+- React/Axios 통합 예시 추가
+- WebSocket 실시간 위치 공유 가이드 추가
 
 ---

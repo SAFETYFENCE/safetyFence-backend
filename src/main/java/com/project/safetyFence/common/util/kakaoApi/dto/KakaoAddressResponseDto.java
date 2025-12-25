@@ -14,7 +14,14 @@ public class KakaoAddressResponseDto {
     private List<DocumentDto> documents;
 
     public DocumentDto getFirstDocument() {
+        if (documents == null || documents.isEmpty()) {
+            return null;
+        }
         return documents.get(0);
+    }
+
+    public boolean hasDocuments() {
+        return documents != null && !documents.isEmpty();
     }
 
     @Getter

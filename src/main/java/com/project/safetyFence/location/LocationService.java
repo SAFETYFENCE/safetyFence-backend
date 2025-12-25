@@ -60,4 +60,39 @@ public class LocationService {
 
         user.addUserLocation(userLocation);
     }
+
+    /**
+     * DB에서 사용자의 최신 위치 조회
+     * 캐시에 위치가 없을 때 fallback으로 사용
+     *
+     * @param userNumber 사용자 번호
+     * @return 최신 위치 DTO (없으면 null)
+     */
+    @Transactional(readOnly = true)
+    public LocationUpdateDto getLatestLocationFromDB(String userNumber) {
+        User user = userRepository.findByNumber(userNumber);
+        if (user == null) {
+            log.debug("DB 위치 조회 실패: 사용자 없음 userNumber={}", userNumber);
+            return null;
+        }
+
+        Optional<UserLocation> latestLocation = userLocationRepository.findLatestByUser(user);
+        if (latestLocation.isEmpty()) {
+            log.debug("DB 위치 조회 실패: 위치 기록 없음 userNumber={}", userNumber);
+            return null;
+        }
+
+        UserLocation location = latestLocation.get();
+        LocationUpdateDto dto = new LocationUpdateDto(
+                location.getLatitude(),
+                location.getLongitude()
+        );
+        dto.setUserNumber(userNumber);
+        dto.setTimestamp(location.getSavedTime().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+
+        log.info("DB에서 마지막 위치 조회 성공: userNumber={}, lat={}, lng={}",
+                userNumber, dto.getLatitude(), dto.getLongitude());
+
+        return dto;
+    }
 }

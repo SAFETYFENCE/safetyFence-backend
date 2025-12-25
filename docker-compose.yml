@@ -5,6 +5,8 @@ services:
   nginx:
     image: nginx:stable-alpine  # 경량화된 nginx 이미지 사용
     container_name: safetyfence-nginx
+    environment:
+      - TZ=Asia/Seoul
 
     # 포트 매핑: "호스트포트:컨테이너포트"
     ports:
@@ -44,6 +46,7 @@ services:
 
     # 환경 변수: 애플리케이션 실행 시 사용되는 변수들
     environment:
+      - TZ=Asia/Seoul
       # 프로덕션 모드로 실행 (application-prod.properties 사용)
       - SPRING_PROFILES_ACTIVE=prod
 
@@ -78,6 +81,7 @@ services:
 
     # 데이터베이스 초기 설정
     environment:
+      - TZ=Asia/Seoul
       - POSTGRES_DB=safetyfence_db              # 생성할 데이터베이스 이름
       - POSTGRES_USER=${SPRING_DATASOURCE_USERNAME}            # 사용자 이름 (.env에서)
       - POSTGRES_PASSWORD=${SPRING_DATASOURCE_PASSWORD}        # 비밀번호 (.env에서)

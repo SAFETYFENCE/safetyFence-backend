@@ -27,7 +27,20 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
+        if (accessor != null && accessor.getCommand() != null) {
+            log.debug("[WS-AUTH] preSend command={}, destination={}, sessionId={}",
+                    accessor.getCommand(),
+                    accessor.getDestination(),
+                    accessor.getSessionId());
+        }
+
         if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+            // CONNECT 프레임 상세 로깅 (디버깅용)
+            log.info("🔍 [CONNECT DEBUG] Received CONNECT frame");
+            log.info("🔍 [CONNECT DEBUG] Command: {}", accessor.getCommand());
+            log.info("🔍 [CONNECT DEBUG] All native headers: {}", accessor.toNativeHeaderMap());
+            log.info("🔍 [CONNECT DEBUG] Message payload type: {}", message.getPayload().getClass());
+
             // WebSocket 연결 시 사용자 번호 추출
             String userNumber = accessor.getFirstNativeHeader("userNumber");
 
@@ -39,8 +52,15 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             // 세션 속성에 사용자 번호 저장
             accessor.getSessionAttributes().put("userNumber", userNumber);
 
-            log.info("WebSocket 연결 성공: userNumber={}, sessionId={}",
+            log.info("✅ WebSocket 연결 성공: userNumber={}, sessionId={}",
                     userNumber, accessor.getSessionId());
+        } else if (accessor != null) {
+            // CONNECT가 아닌 경우에도 userNumber가 세션에 있는지 확인
+            Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
+            if (sessionAttributes == null || sessionAttributes.get("userNumber") == null) {
+                log.debug("[WS-AUTH] 세션에 userNumber 없음: command={}, sessionId={}",
+                        accessor.getCommand(), accessor.getSessionId());
+            }
         }
 
         // SUBSCRIBE 명령 시 권한 체크
@@ -73,8 +93,15 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
                     log.info("구독 승인: subscriber={}, target={}, destination={}",
                             subscriberNumber, targetUserNumber, destination);
+                } else {
+                    log.debug("[WS-AUTH] SUBSCRIBE but destination not matched: {}", destination);
                 }
+            } else {
+                log.debug("[WS-AUTH] SUBSCRIBE destination null: sessionId={}", accessor.getSessionId());
             }
+        } else if (accessor != null && accessor.getCommand() == StompCommand.SEND) {
+            log.debug("[WS-AUTH] SEND command received: destination={}, sessionId={}",
+                    accessor.getDestination(), accessor.getSessionId());
         }
 
         return message;

@@ -2,17 +2,39 @@ package com.project.safetyFence.geofence.handler;
 
 import com.project.safetyFence.geofence.domain.Geofence;
 import com.project.safetyFence.log.domain.Log;
+import com.project.safetyFence.notification.NotificationService;
 import com.project.safetyFence.user.domain.User;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 @DisplayName("지오펜스 진입 핸들러 테스트")
+@ExtendWith(MockitoExtension.class)
 class GeofenceEntryHandlerTest {
+
+    @Mock
+    private NotificationService notificationService;
+
+    private PersistentGeofenceEntryHandler persistentHandler;
+    private TemporaryGeofenceEntryHandler temporaryHandler;
+
+    @BeforeEach
+    void setUp() {
+        persistentHandler = new PersistentGeofenceEntryHandler(notificationService);
+        temporaryHandler = new TemporaryGeofenceEntryHandler(notificationService);
+    }
 
     @Test
     @DisplayName("영구형 지오펜스 진입 시 로그 저장 및 maxSequence 차감")
@@ -36,8 +58,7 @@ class GeofenceEntryHandlerTest {
         int initialLogCount = user.getLogs().size();
 
         // when
-        GeofenceEntryHandler handler = new PersistentGeofenceEntryHandler();
-        handler.handle(user, geofence);
+        persistentHandler.handle(user, geofence);
 
         // then
         // 1. 로그가 저장되었는지 확인
@@ -72,8 +93,7 @@ class GeofenceEntryHandlerTest {
         user.addGeofence(geofence);
 
         // when
-        GeofenceEntryHandler handler = new PersistentGeofenceEntryHandler();
-        handler.handle(user, geofence);
+        persistentHandler.handle(user, geofence);
 
         // then
         // 1. 로그는 저장됨
@@ -107,8 +127,7 @@ class GeofenceEntryHandlerTest {
         int initialLogCount = user.getLogs().size();
 
         // when
-        GeofenceEntryHandler handler = new TemporaryGeofenceEntryHandler();
-        handler.handle(user, geofence);
+        temporaryHandler.handle(user, geofence);
 
         // then
         // 1. 로그가 저장되었는지 확인
@@ -126,23 +145,17 @@ class GeofenceEntryHandlerTest {
     @Test
     @DisplayName("PersistentGeofenceEntryHandler는 type=0을 지원")
     void persistentHandler_supportsType0() {
-        // given
-        GeofenceEntryHandler handler = new PersistentGeofenceEntryHandler();
-
         // when & then
-        assertThat(handler.supports(0)).isTrue();
-        assertThat(handler.supports(1)).isFalse();
+        assertThat(persistentHandler.supports(0)).isTrue();
+        assertThat(persistentHandler.supports(1)).isFalse();
     }
 
     @Test
     @DisplayName("TemporaryGeofenceEntryHandler는 type=1을 지원")
     void temporaryHandler_supportsType1() {
-        // given
-        GeofenceEntryHandler handler = new TemporaryGeofenceEntryHandler();
-
         // when & then
-        assertThat(handler.supports(1)).isTrue();
-        assertThat(handler.supports(0)).isFalse();
+        assertThat(temporaryHandler.supports(1)).isTrue();
+        assertThat(temporaryHandler.supports(0)).isFalse();
     }
 
     @Test
@@ -166,11 +179,9 @@ class GeofenceEntryHandlerTest {
         user.addGeofence(geofence1);
         user.addGeofence(geofence2);
 
-        GeofenceEntryHandler handler = new PersistentGeofenceEntryHandler();
-
         // when
-        handler.handle(user, geofence1);
-        handler.handle(user, geofence2);
+        persistentHandler.handle(user, geofence1);
+        persistentHandler.handle(user, geofence2);
 
         // then
         assertThat(user.getLogs()).hasSize(2);

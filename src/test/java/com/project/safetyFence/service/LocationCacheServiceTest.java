@@ -2,9 +2,14 @@ package com.project.safetyFence.service;
 
 import com.project.safetyFence.location.dto.LocationUpdateDto;
 import com.project.safetyFence.location.LocationCacheService;
+import com.project.safetyFence.location.UserLocationRepository;
+import com.project.safetyFence.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.concurrent.TimeUnit;
 
@@ -16,13 +21,20 @@ import static org.awaitility.Awaitility.await;
  * 캐시 저장, 조회, 삭제, TTL 동작 검증
  */
 @DisplayName("LocationCacheService 단위 테스트")
+@ExtendWith(MockitoExtension.class)
 class LocationCacheServiceTest {
 
     private LocationCacheService cacheService;
 
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private UserLocationRepository userLocationRepository;
+
     @BeforeEach
     void setUp() {
-        cacheService = new LocationCacheService();
+        cacheService = new LocationCacheService(userRepository, userLocationRepository);
     }
 
     @Test

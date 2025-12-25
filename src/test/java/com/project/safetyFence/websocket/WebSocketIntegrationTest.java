@@ -19,19 +19,15 @@ import org.springframework.messaging.simp.stomp.*;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
-import org.springframework.web.socket.sockjs.client.SockJsClient;
-import org.springframework.web.socket.sockjs.client.WebSocketTransport;
 
 import java.lang.reflect.Type;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
-import static org.awaitility.Awaitility.await;
 
 /**
  * WebSocket 통합 테스트
@@ -73,12 +69,10 @@ class WebSocketIntegrationTest {
 
         wsUrl = "ws://localhost:" + port + "/ws";
 
-        // WebSocket 클라이언트 설정
-        SockJsClient sockJsClient = new SockJsClient(
-                List.of(new WebSocketTransport(new StandardWebSocketClient()))
-        );
+        // WebSocket 클라이언트 설정 (네이티브 WebSocket 사용)
+        StandardWebSocketClient webSocketClient = new StandardWebSocketClient();
 
-        stompClient = new WebSocketStompClient(sockJsClient);
+        stompClient = new WebSocketStompClient(webSocketClient);
         stompClient.setMessageConverter(new MappingJackson2MessageConverter());
 
         blockingQueue = new LinkedBlockingQueue<>();

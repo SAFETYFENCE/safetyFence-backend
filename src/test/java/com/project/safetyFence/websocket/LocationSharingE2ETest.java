@@ -20,8 +20,6 @@ import org.springframework.messaging.simp.stomp.*;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
-import org.springframework.web.socket.sockjs.client.SockJsClient;
-import org.springframework.web.socket.sockjs.client.WebSocketTransport;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Type;
@@ -64,11 +62,10 @@ class LocationSharingE2ETest {
     void setUp() {
         wsUrl = "ws://localhost:" + port + "/ws";
 
-        SockJsClient sockJsClient = new SockJsClient(
-                List.of(new WebSocketTransport(new StandardWebSocketClient()))
-        );
+        // React Native용 네이티브 WebSocket 클라이언트 (SockJS 제거)
+        StandardWebSocketClient webSocketClient = new StandardWebSocketClient();
 
-        stompClient = new WebSocketStompClient(sockJsClient);
+        stompClient = new WebSocketStompClient(webSocketClient);
         stompClient.setMessageConverter(new MappingJackson2MessageConverter());
     }
 

@@ -50,7 +50,7 @@ public class WebSocketEventListener {
 
     /**
      * WebSocket 구독 이벤트
-     * 위치 토픽 구독 시 캐시된 최신 위치를 즉시 전송
+     * 위치 토픽 구독 시 최신 위치를 즉시 전송 (캐시 → DB 폴백)
      */
     @EventListener
     public void handleWebSocketSubscribeListener(SessionSubscribeEvent event) {
@@ -72,18 +72,18 @@ public class WebSocketEventListener {
             log.info("위치 토픽 구독 감지: subscriber={}, target={}, destination={}",
                     subscriberNumber, targetUserNumber, destination);
 
-            // 캐시된 최신 위치 조회
-            LocationUpdateDto cachedLocation = cacheService.getLatestLocation(targetUserNumber);
+            // 캐시 → DB 폴백으로 최신 위치 조회
+            LocationUpdateDto location = cacheService.getLatestLocationWithFallback(targetUserNumber);
 
-            if (cachedLocation != null) {
-                // 토픽 구독자들에게 캐시된 위치 전송
-                messagingTemplate.convertAndSend(destination, cachedLocation);
+            if (location != null) {
+                // 토픽 구독자들에게 위치 전송
+                messagingTemplate.convertAndSend(destination, location);
 
-                log.info("캐시된 위치 전송 완료: subscriber={}, target={}, lat={}, lng={}",
+                log.info("위치 전송 완료: subscriber={}, target={}, lat={}, lng={}",
                         subscriberNumber, targetUserNumber,
-                        cachedLocation.getLatitude(), cachedLocation.getLongitude());
+                        location.getLatitude(), location.getLongitude());
             } else {
-                log.debug("캐시된 위치 없음: target={}", targetUserNumber);
+                log.warn("전송할 위치 데이터 없음: subscriber={}, target={}", subscriberNumber, targetUserNumber);
             }
         }
     }
