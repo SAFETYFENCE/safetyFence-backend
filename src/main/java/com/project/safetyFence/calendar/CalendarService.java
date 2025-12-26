@@ -11,6 +11,11 @@ import com.project.safetyFence.calendar.dto.OneDayResponseDto;
 import com.project.safetyFence.calendar.dto.UserEventItemDto;
 import com.project.safetyFence.calendar.UserEventRepository;
 import com.project.safetyFence.user.UserRepository;
+import com.project.safetyFence.medication.MedicationRepository;
+import com.project.safetyFence.medication.MedicationLogRepository;
+import com.project.safetyFence.medication.domain.Medication;
+import com.project.safetyFence.medication.domain.MedicationLog;
+import com.project.safetyFence.medication.dto.MedicationItemDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +34,8 @@ public class CalendarService {
 
     private final UserRepository userRepository;
     private final UserEventRepository userEventRepository;
+    private final MedicationRepository medicationRepository;
+    private final MedicationLogRepository medicationLogRepository;
 
 
     @Transactional(readOnly = true)
@@ -95,6 +102,25 @@ public class CalendarService {
                 eventStartTime
             );
             dayDto.addUserEvent(eventItem);
+        }
+
+        // 4. Medication 데이터 처리
+        List<Medication> medications = medicationRepository.findByUserNumber(userNumber);
+
+        // 각 날짜에 대해 모든 약의 복용 여부 확인
+        for (Map.Entry<String, OneDayResponseDto> entry : dateMap.entrySet()) {
+            LocalDate date = LocalDate.parse(entry.getKey(), dateFormatter);
+            OneDayResponseDto dayDto = entry.getValue();
+
+            // 각 약에 대해 해당 날짜에 복용했는지 확인
+            for (Medication medication : medications) {
+                List<MedicationLog> logs = medicationLogRepository
+                    .findByMedicationIdAndDate(medication.getId(), date);
+                boolean checked = !logs.isEmpty();
+
+                MedicationItemDto medicationItem = new MedicationItemDto(medication, checked);
+                dayDto.addMedication(medicationItem);
+            }
         }
 
         // Map의 값들을 리스트로 변환 (날짜순으로 정렬됨)

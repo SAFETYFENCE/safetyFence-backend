@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -76,6 +77,15 @@ public class MedicationController {
         MedicationHistoryResponseDto response = medicationService.getMedicationHistory(
                 userNumber, medicationId, startDate, endDate
         );
+        return ResponseEntity.ok(response);
+    }
+
+    // 피보호자들의 당일 약 복용 상태 조회 (보호자용)
+    @GetMapping("/api/medications/wards-today")
+    public ResponseEntity<List<WardMedicationStatusDto>> getWardsTodayMedicationStatus(
+            HttpServletRequest request) {
+        String userNumber = (String) request.getAttribute("userNumber");
+        List<WardMedicationStatusDto> response = medicationService.getWardsTodayMedicationStatus(userNumber);
         return ResponseEntity.ok(response);
     }
 }

@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -210,5 +211,52 @@ public class MedicationService {
                 .history(historyItems)
                 .totalCheckCount(historyItems.size())
                 .build();
+    }
+
+    /**
+     * 피보호자들의 당일 약 복용 상태 조회 (보호자용)
+     */
+    public List<WardMedicationStatusDto> getWardsTodayMedicationStatus(String supporterNumber) {
+        // 내가 구독한 피보호자들 조회
+        User supporter = userRepository.findByNumberWithLinks(supporterNumber);
+        List<Link> wardLinks = supporter.getLinks();
+
+        List<WardMedicationStatusDto> wardStatuses = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+
+        for (Link link : wardLinks) {
+            String wardNumber = link.getUserNumber();
+            User ward = userRepository.findByNumber(wardNumber);
+
+            // 피보호자의 약 목록 조회
+            List<Medication> medications = medicationRepository.findByUserNumber(wardNumber);
+
+            // 각 약의 오늘 복용 여부 확인
+            List<MedicationItemDto> medicationItems = medications.stream()
+                    .map(medication -> {
+                        List<MedicationLog> logs = medicationLogRepository
+                                .findByMedicationIdAndDate(medication.getId(), today);
+                        boolean checked = !logs.isEmpty();
+                        return new MedicationItemDto(medication, checked);
+                    })
+                    .collect(Collectors.toList());
+
+            // 복용한 약 개수 계산
+            int checkedCount = (int) medicationItems.stream()
+                    .filter(MedicationItemDto::isCheckedToday)
+                    .count();
+
+            WardMedicationStatusDto wardStatus = WardMedicationStatusDto.builder()
+                    .wardNumber(wardNumber)
+                    .wardName(ward.getName())
+                    .medications(medicationItems)
+                    .totalMedications(medicationItems.size())
+                    .checkedMedications(checkedCount)
+                    .build();
+
+            wardStatuses.add(wardStatus);
+        }
+
+        return wardStatuses;
     }
 }
