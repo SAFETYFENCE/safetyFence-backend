@@ -4,16 +4,11 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Getter
 @NoArgsConstructor
-@Table(
-    uniqueConstraints = @UniqueConstraint(
-        columnNames = {"medication_id", "checked_date"}
-    )
-)
 public class MedicationLog {
 
     @Id
@@ -25,11 +20,11 @@ public class MedicationLog {
     private Medication medication;
 
     @Column(nullable = false)
-    private LocalDate checkedDate;  // 체크한 날짜 (하루에 하나만)
+    private LocalDateTime checkedDateTime;  // 체크한 날짜 + 시간 (여러 번 가능)
 
-    public MedicationLog(Medication medication, LocalDate checkedDate) {
+    public MedicationLog(Medication medication, LocalDateTime checkedDateTime) {
         this.medication = medication;
-        this.checkedDate = checkedDate;
+        this.checkedDateTime = checkedDateTime;
     }
 
     // 연관관계 편의 메서드
