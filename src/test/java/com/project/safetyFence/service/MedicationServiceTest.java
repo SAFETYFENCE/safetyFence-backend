@@ -50,7 +50,7 @@ class MedicationServiceTest {
     @DisplayName("약 목록 조회 성공")
     void getMedications_Success() {
         // when
-        MedicationListResponseDto response = medicationService.getMedications(testUser.getNumber());
+        MedicationListResponseDto response = medicationService.getMedications(testUser.getNumber(), null);
 
         // then
         assertThat(response.getMedications()).hasSize(1);
@@ -66,7 +66,7 @@ class MedicationServiceTest {
         userRepository.save(emptyUser);
 
         // when
-        MedicationListResponseDto response = medicationService.getMedications(emptyUser.getNumber());
+        MedicationListResponseDto response = medicationService.getMedications(emptyUser.getNumber(), null);
 
         // then
         assertThat(response.getMedications()).isEmpty();
@@ -94,7 +94,7 @@ class MedicationServiceTest {
         medicationRepository.save(newMedication);
 
         // when
-        MedicationListResponseDto response = medicationService.getMedications(testUser.getNumber());
+        MedicationListResponseDto response = medicationService.getMedications(testUser.getNumber(), null);
 
         // then
         assertThat(response.getMedications()).hasSize(2);
@@ -156,7 +156,7 @@ class MedicationServiceTest {
         medicationRepository.save(medication3);
 
         // when
-        MedicationListResponseDto response = medicationService.getMedications(testUser.getNumber());
+        MedicationListResponseDto response = medicationService.getMedications(testUser.getNumber(), null);
 
         // then
         assertThat(response.getMedications()).hasSize(3);
