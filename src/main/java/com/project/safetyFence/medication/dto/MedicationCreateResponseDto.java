@@ -10,6 +10,6 @@ public class MedicationCreateResponseDto {
 
     public MedicationCreateResponseDto(Medication medication) {
         this.message = "약이 등록되었습니다";
-        this.medication = new MedicationItemDto(medication);
+        this.medication = new MedicationItemDto(medication, false);
     }
 }
