@@ -17,6 +17,8 @@ public enum ErrorResult {
     CANNOT_ADD_SELF_AS_LINK(HttpStatus.BAD_REQUEST, "자기 자신을 링크로 추가할 수 없습니다."),
     LINK_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "이미 링크에 추가된 사용자입니다."),
     LINK_NOT_FOUND(HttpStatus.BAD_REQUEST, "링크 삭제 중 문제가 발생했습니다."),
+    UNAUTHORIZED_ACCESS(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
+    PRIMARY_SUPPORTER_NOT_FOUND(HttpStatus.NOT_FOUND, "대표 보호자가 설정되지 않았습니다."),
     GEOFENCE_ADDRESS_CONVERSION_FAILED(HttpStatus.BAD_REQUEST, "주소를 좌표로 변환하는데 실패했습니다.");
 
     private final HttpStatus httpStatus;
