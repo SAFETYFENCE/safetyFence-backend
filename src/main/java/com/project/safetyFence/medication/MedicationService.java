@@ -78,8 +78,9 @@ public class MedicationService {
                     List<MedicationLog> logs = medicationLogRepository
                             .findByMedicationIdAndDate(medication.getId(), checkDate);
                     boolean checked = !logs.isEmpty();
+                    int checkCount = logs.size();  // 오늘 몇 번 먹었는지
 
-                    return new MedicationItemDto(medication, checked);
+                    return new MedicationItemDto(medication, checked, checkCount);
                 })
                 .collect(Collectors.toList());
 
@@ -237,7 +238,8 @@ public class MedicationService {
                         List<MedicationLog> logs = medicationLogRepository
                                 .findByMedicationIdAndDate(medication.getId(), today);
                         boolean checked = !logs.isEmpty();
-                        return new MedicationItemDto(medication, checked);
+                        int checkCount = logs.size();  // 오늘 몇 번 먹었는지
+                        return new MedicationItemDto(medication, checked, checkCount);
                     })
                     .collect(Collectors.toList());
 
