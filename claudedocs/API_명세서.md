@@ -1,9 +1,9 @@
 # Safety Fence API 명세서
 
 > **프로젝트**: Safety Fence - 실시간 위치 추적 및 지오펜스 시스템
-> **버전**: 1.2
+> **버전**: 1.3
 > **작성일**: 2025-10-25
-> **최종 수정**: 2025-12-24
+> **최종 수정**: 2025-12-29
 
 ## 목차
 1. [인증 및 사용자 관리 API](#1-인증-및-사용자-관리-api)
@@ -13,8 +13,9 @@
 5. [캘린더 API](#5-캘린더-api)
 6. [마이페이지 API](#6-마이페이지-api)
 7. [알림 (Notification) API](#7-알림-notification-api)
-8. [WebSocket 실시간 위치 공유 API](#8-websocket-실시간-위치-공유-api)
-9. [약 관리 (Medication) API](#9-약-관리-medication-api)
+8. [배터리 모니터링 API](#8-배터리-모니터링-api)
+9. [WebSocket 실시간 위치 공유 API](#9-websocket-실시간-위치-공유-api)
+10. [약 관리 (Medication) API](#10-약-관리-medication-api)
 
 ---
 
@@ -217,15 +218,28 @@ X-API-Key: your-api-key
   {
     "id": 1,
     "userNumber": "01098765432",
-    "relation": "친구"
+    "relation": "친구",
+    "batteryLevel": 85,
+    "batteryLastUpdate": 1703123456789
   },
   {
     "id": 2,
     "userNumber": "01011112222",
-    "relation": "가족"
+    "relation": "가족",
+    "batteryLevel": null,
+    "batteryLastUpdate": null
   }
 ]
 ```
+
+**Response 필드**:
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| id | Long | 링크 ID |
+| userNumber | String | 연결된 사용자 전화번호 |
+| relation | String | 관계 (친구, 가족 등) |
+| batteryLevel | Integer | 배터리 잔량 (0-100), 최근 5분 이내 데이터가 없으면 null |
+| batteryLastUpdate | Long | 배터리 마지막 업데이트 시간 (Unix timestamp ms), 데이터가 없으면 null |
 
 **React 예시**:
 ```jsx
@@ -251,13 +265,23 @@ const LinkList = () => {
     }
   };
 
+  const formatBatteryTime = (timestamp) => {
+    if (!timestamp) return '정보 없음';
+    const date = new Date(timestamp);
+    return date.toLocaleString('ko-KR');
+  };
+
   return (
     <div>
       <h2>내 링크 목록</h2>
       <ul>
         {links.map(link => (
           <li key={link.id}>
-            {link.userNumber} - {link.relation}
+            <div>{link.userNumber} - {link.relation}</div>
+            <div>
+              배터리: {link.batteryLevel !== null ? `${link.batteryLevel}%` : '정보 없음'}
+              {link.batteryLastUpdate && ` (${formatBatteryTime(link.batteryLastUpdate)})`}
+            </div>
           </li>
         ))}
       </ul>
@@ -1894,7 +1918,193 @@ const EmergencyButton = () => {
 
 ---
 
-### 7.4 푸시 알림 수신 처리
+### 7.4 약 추가 알림 전송
+
+**Endpoint**: `POST /notification/medication-added`
+
+**Description**: 보호자가 피보호자의 약을 추가했을 때 피보호자에게 알림을 전송합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key (보호자의 API Key)
+```
+
+**Request Body**:
+```json
+{
+  "targetUserNumber": "01012345678",
+  "medicationName": "타이레놀"
+}
+```
+
+**Request 필드**:
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| targetUserNumber | String | ✅ | 피보호자 전화번호 |
+| medicationName | String | ✅ | 추가된 약 이름 |
+
+**Response**:
+```json
+"Notification sent successfully"
+```
+
+**Error Response**:
+```json
+"권한이 없습니다."  // 보호자-피보호자 관계가 아닌 경우
+"사용자를 찾을 수 없습니다."  // 피보호자를 찾을 수 없는 경우
+```
+
+**알림 메시지 형식**:
+- **제목**: "약 추가 알림"
+- **내용**: "보호자님이 약 '{약이름}'을(를) 추가했습니다"
+- **Android 채널**: `ward_updates` (기본 중요도)
+
+**React Native 예시**:
+```jsx
+import axios from 'axios';
+
+const MedicationManager = () => {
+  const sendMedicationAddedNotification = async (wardNumber, medicationName) => {
+    try {
+      const apiKey = await AsyncStorage.getItem('apiKey');
+
+      const response = await axios.post(
+        '/notification/medication-added',
+        {
+          targetUserNumber: wardNumber,
+          medicationName: medicationName
+        },
+        {
+          headers: { 'X-API-Key': apiKey }
+        }
+      );
+
+      console.log('✅ 약 추가 알림 전송 성공:', response.data);
+      Alert.alert('성공', '피보호자에게 알림이 전송되었습니다.');
+
+    } catch (error) {
+      console.error('❌ 약 추가 알림 전송 실패:', error);
+      Alert.alert('오류', error.response?.data || '알림 전송에 실패했습니다.');
+    }
+  };
+
+  const handleAddMedication = async () => {
+    // 약 추가 로직...
+
+    // 약 추가 후 알림 전송
+    await sendMedicationAddedNotification('01012345678', '타이레놀');
+  };
+
+  return (
+    <TouchableOpacity onPress={handleAddMedication}>
+      <Text>약 추가</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+---
+
+### 7.5 일정 추가 알림 전송
+
+**Endpoint**: `POST /notification/event-added`
+
+**Description**: 보호자가 피보호자의 일정을 추가했을 때 피보호자에게 알림을 전송합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key (보호자의 API Key)
+```
+
+**Request Body**:
+```json
+{
+  "targetUserNumber": "01012345678",
+  "eventTitle": "병원 방문",
+  "eventDate": "2024-01-15",
+  "eventTime": "14:30"
+}
+```
+
+**Request 필드**:
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| targetUserNumber | String | ✅ | 피보호자 전화번호 |
+| eventTitle | String | ✅ | 일정 제목 |
+| eventDate | String | ✅ | 일정 날짜 (yyyy-MM-dd) |
+| eventTime | String | ✅ | 일정 시간 (HH:mm) |
+
+**Response**:
+```json
+"Notification sent successfully"
+```
+
+**Error Response**:
+```json
+"권한이 없습니다."  // 보호자-피보호자 관계가 아닌 경우
+"사용자를 찾을 수 없습니다."  // 피보호자를 찾을 수 없는 경우
+```
+
+**알림 메시지 형식**:
+- **제목**: "일정 추가 알림"
+- **내용**: "보호자님이 일정 '{일정제목}'을(를) {날짜} {시간}에 추가했습니다"
+- **Android 채널**: `ward_updates` (기본 중요도)
+
+**React Native 예시**:
+```jsx
+import axios from 'axios';
+
+const EventManager = () => {
+  const sendEventAddedNotification = async (wardNumber, eventData) => {
+    try {
+      const apiKey = await AsyncStorage.getItem('apiKey');
+
+      const response = await axios.post(
+        '/notification/event-added',
+        {
+          targetUserNumber: wardNumber,
+          eventTitle: eventData.title,
+          eventDate: eventData.date,
+          eventTime: eventData.time
+        },
+        {
+          headers: { 'X-API-Key': apiKey }
+        }
+      );
+
+      console.log('✅ 일정 추가 알림 전송 성공:', response.data);
+      Alert.alert('성공', '피보호자에게 알림이 전송되었습니다.');
+
+    } catch (error) {
+      console.error('❌ 일정 추가 알림 전송 실패:', error);
+      Alert.alert('오류', error.response?.data || '알림 전송에 실패했습니다.');
+    }
+  };
+
+  const handleAddEvent = async () => {
+    const eventData = {
+      title: '병원 방문',
+      date: '2024-01-15',
+      time: '14:30'
+    };
+
+    // 일정 추가 로직...
+
+    // 일정 추가 후 알림 전송
+    await sendEventAddedNotification('01012345678', eventData);
+  };
+
+  return (
+    <TouchableOpacity onPress={handleAddEvent}>
+      <Text>일정 추가</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+---
+
+### 7.6 푸시 알림 수신 처리
 
 **React Native 예시 (포그라운드 + 백그라운드)**:
 ```jsx
@@ -1956,7 +2166,7 @@ export default NotificationHandler;
 
 ---
 
-### 7.5 알림 권한 요청
+### 7.7 알림 권한 요청
 
 **React Native 예시**:
 ```jsx
@@ -2002,9 +2212,9 @@ const RequestNotificationPermission = () => {
 
 ---
 
-## 9. 약 관리 (Medication) API
+## 10. 약 관리 (Medication) API
 
-### 9.1 약 리스트 조회 (날짜별 복용 여부 포함)
+### 10.1 약 리스트 조회 (날짜별 복용 여부 포함)
 
 **Endpoint**: `GET /api/medications`
 
@@ -2112,7 +2322,7 @@ export default MedicationList;
 
 ---
 
-### 9.2 약 추가
+### 10.2 약 추가
 
 **Endpoint**: `POST /api/medications`
 
@@ -2225,7 +2435,7 @@ export default AddMedication;
 
 ---
 
-### 9.3 약 삭제
+### 10.3 약 삭제
 
 **Endpoint**: `DELETE /api/medications/{medicationId}`
 
@@ -2296,7 +2506,7 @@ export default DeleteMedicationButton;
 
 ---
 
-### 9.4 약 복용 체크
+### 10.4 약 복용 체크
 
 **Endpoint**: `POST /api/medications/{medicationId}/check`
 
@@ -2374,7 +2584,7 @@ export default CheckMedicationButton;
 
 ---
 
-### 9.5 약 복용 체크 해제
+### 10.5 약 복용 체크 해제
 
 **Endpoint**: `DELETE /api/medications/{medicationId}/uncheck`
 
@@ -2450,7 +2660,7 @@ export default UncheckMedicationButton;
 
 ---
 
-### 9.6 약 복용 이력 조회
+### 10.6 약 복용 이력 조회
 
 **Endpoint**: `GET /api/medications/{medicationId}/history`
 
@@ -2581,7 +2791,7 @@ export default MedicationHistory;
 
 ---
 
-### 9.7 피보호자들의 당일 약 복용 상태 조회 (보호자용)
+### 10.7 피보호자들의 당일 약 복용 상태 조회 (보호자용)
 
 **Endpoint**: `GET /api/medications/wards-today`
 
@@ -2752,7 +2962,159 @@ export default WardsMedicationStatus;
 
 ---
 
-## 8. WebSocket 실시간 위치 공유 API
+## 8. 배터리 모니터링 API
+
+### 8.1 배터리 정보 업데이트
+
+**Endpoint**: `POST /battery`
+
+**Description**: 사용자의 배터리 정보를 서버 메모리(Caffeine Cache)에 업데이트합니다. 5분 TTL이 적용되며, 링크 목록 조회 시 자동으로 포함됩니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Request Body**:
+```json
+{
+  "batteryLevel": 85
+}
+```
+
+**Request 필드**:
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| batteryLevel | Integer | ✅ | 배터리 잔량 (0-100) |
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "배터리 정보가 업데이트되었습니다",
+  "batteryLevel": 85,
+  "timestamp": 1703123456789
+}
+```
+
+**Response 필드**:
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| status | String | 처리 상태 ("success") |
+| message | String | 결과 메시지 |
+| batteryLevel | Integer | 업데이트된 배터리 잔량 |
+| timestamp | Long | 업데이트 시간 (Unix timestamp ms) |
+
+**Error Response**:
+```json
+{
+  "status": "error",
+  "message": "배터리 레벨은 0에서 100 사이여야 합니다"
+}
+```
+
+**캐시 특성**:
+- **TTL (Time To Live)**: 5분
+- **저장소**: 메모리 (Caffeine Cache)
+- **영속성**: 없음 (서버 재시작 시 초기화)
+- **최대 크기**: 10,000개 항목
+
+**React Native 예시 (포그라운드 + 백그라운드)**:
+```jsx
+import { useEffect } from 'react';
+import { AppState } from 'react-native';
+import DeviceInfo from 'react-native-device-info';
+import axios from 'axios';
+import BackgroundTimer from 'react-native-background-timer';
+
+const BatteryMonitor = () => {
+  const sendBatteryUpdate = async () => {
+    try {
+      const batteryLevel = await DeviceInfo.getBatteryLevel();
+      const apiKey = await AsyncStorage.getItem('apiKey');
+
+      const response = await axios.post(
+        '/battery',
+        {
+          batteryLevel: Math.round(batteryLevel * 100)
+        },
+        {
+          headers: { 'X-API-Key': apiKey }
+        }
+      );
+
+      console.log('✅ 배터리 업데이트 성공:', response.data);
+
+    } catch (error) {
+      console.error('❌ 배터리 업데이트 실패:', error);
+    }
+  };
+
+  useEffect(() => {
+    // 초기 전송
+    sendBatteryUpdate();
+
+    // 5분마다 전송 (포그라운드)
+    const foregroundInterval = setInterval(() => {
+      sendBatteryUpdate();
+    }, 5 * 60 * 1000);
+
+    // 백그라운드 타이머 설정
+    BackgroundTimer.runBackgroundTimer(() => {
+      sendBatteryUpdate();
+    }, 5 * 60 * 1000);
+
+    // 클린업
+    return () => {
+      clearInterval(foregroundInterval);
+      BackgroundTimer.stopBackgroundTimer();
+    };
+  }, []);
+
+  // 앱 상태 변경 감지
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('앱이 포그라운드로 전환됨 - 배터리 업데이트');
+        sendBatteryUpdate();
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
+
+  return null;
+};
+
+export default BatteryMonitor;
+```
+
+**iOS 백그라운드 설정** (Info.plist):
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>fetch</string>
+  <string>processing</string>
+</array>
+```
+
+**Android 백그라운드 설정** (AndroidManifest.xml):
+```xml
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+```
+
+**권장 사항**:
+- **전송 주기**: 5분 (배터리 소모 최소화)
+- **에러 처리**: 실패 시 재시도 로직 구현
+- **배터리 최적화**: 백그라운드 제한 해제 요청
+- **사용자 알림**: 배터리 모니터링 목적 명시
+
+---
+
+## 9. WebSocket 실시간 위치 공유 API
 
 ### 7.1 WebSocket 개요
 
