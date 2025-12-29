@@ -80,12 +80,13 @@ public class MedicationController {
         return ResponseEntity.ok(response);
     }
 
-    // 피보호자들의 당일 약 복용 상태 조회 (보호자용)
+    // 피보호자들의 약 복용 상태 조회 (보호자용)
     @GetMapping("/api/medications/wards-today")
     public ResponseEntity<List<WardMedicationStatusDto>> getWardsTodayMedicationStatus(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             HttpServletRequest request) {
         String userNumber = (String) request.getAttribute("userNumber");
-        List<WardMedicationStatusDto> response = medicationService.getWardsTodayMedicationStatus(userNumber);
+        List<WardMedicationStatusDto> response = medicationService.getWardsTodayMedicationStatus(userNumber, date);
         return ResponseEntity.ok(response);
     }
 }

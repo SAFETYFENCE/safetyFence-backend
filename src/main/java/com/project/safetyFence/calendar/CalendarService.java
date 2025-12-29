@@ -117,8 +117,9 @@ public class CalendarService {
                 List<MedicationLog> logs = medicationLogRepository
                     .findByMedicationIdAndDate(medication.getId(), date);
                 boolean checked = !logs.isEmpty();
+                int checkCount = logs.size();  // 해당 날짜에 몇 번 먹었는지
 
-                MedicationItemDto medicationItem = new MedicationItemDto(medication, checked);
+                MedicationItemDto medicationItem = new MedicationItemDto(medication, checked, checkCount);
                 dayDto.addMedication(medicationItem);
             }
         }
