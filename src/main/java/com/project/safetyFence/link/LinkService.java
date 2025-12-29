@@ -9,6 +9,8 @@ import com.project.safetyFence.common.exception.CustomException;
 import com.project.safetyFence.common.exception.ErrorResult;
 import com.project.safetyFence.link.LinkRepository;
 import com.project.safetyFence.user.UserRepository;
+import com.project.safetyFence.location.LocationCacheService;
+import com.project.safetyFence.location.dto.BatteryUpdateDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,7 @@ public class LinkService {
 
     private final LinkRepository linkRepository;
     private final UserRepository userRepository;
+    private final LocationCacheService cacheService;
 
     @Transactional
     public List<LinkResponseDto> getUserLink(String userNumber) {
@@ -29,11 +32,31 @@ public class LinkService {
         List<Link> links = user.getLinks();
 
         return links.stream()
-                .map(link -> new LinkResponseDto(
-                        link.getId(),
-                        link.getUserNumber(),
-                        link.getRelation()
-                ))
+                .map(link -> {
+                    String linkUserNumber = link.getUserNumber();
+
+                    // 캐시에서 배터리 정보 조회
+                    BatteryUpdateDto battery =
+                        cacheService.getLatestBattery(linkUserNumber);
+
+                    if (battery != null) {
+                        // 배터리 정보 포함
+                        return new LinkResponseDto(
+                            link.getId(),
+                            linkUserNumber,
+                            link.getRelation(),
+                            battery.getBatteryLevel(),
+                            battery.getTimestamp()
+                        );
+                    } else {
+                        // 배터리 정보 없음 (역호환)
+                        return new LinkResponseDto(
+                            link.getId(),
+                            linkUserNumber,
+                            link.getRelation()
+                        );
+                    }
+                })
                 .toList();
     }
 
