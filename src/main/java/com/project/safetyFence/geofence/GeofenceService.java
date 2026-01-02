@@ -112,13 +112,22 @@ public class GeofenceService implements InitialGeofenceCreator {
                     999
             );
         } else { // 일시 지오펜스
-            // "09:00" 형식의 시간을 오늘 날짜와 결합하여 LocalDateTime으로 변환
-            java.time.LocalDate today = java.time.LocalDate.now();
+            // 날짜 파싱: startDate/endDate가 제공되면 사용, 없으면 오늘 날짜 사용 (하위 호환성)
+            java.time.LocalDate startLocalDate = (geofenceRequestDto.getStartDate() != null && !geofenceRequestDto.getStartDate().isEmpty())
+                    ? java.time.LocalDate.parse(geofenceRequestDto.getStartDate())
+                    : java.time.LocalDate.now();
+
+            java.time.LocalDate endLocalDate = (geofenceRequestDto.getEndDate() != null && !geofenceRequestDto.getEndDate().isEmpty())
+                    ? java.time.LocalDate.parse(geofenceRequestDto.getEndDate())
+                    : java.time.LocalDate.now();
+
+            // "09:00" 형식의 시간 파싱
             java.time.LocalTime startLocalTime = java.time.LocalTime.parse(geofenceRequestDto.getStartTime());
             java.time.LocalTime endLocalTime = java.time.LocalTime.parse(geofenceRequestDto.getEndTime());
 
-            java.time.LocalDateTime startDateTime = java.time.LocalDateTime.of(today, startLocalTime);
-            java.time.LocalDateTime endDateTime = java.time.LocalDateTime.of(today, endLocalTime);
+            // 날짜 + 시간 결합
+            java.time.LocalDateTime startDateTime = java.time.LocalDateTime.of(startLocalDate, startLocalTime);
+            java.time.LocalDateTime endDateTime = java.time.LocalDateTime.of(endLocalDate, endLocalTime);
 
             geofence = new Geofence(
                     user,

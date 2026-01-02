@@ -1,9 +1,13 @@
 package com.project.safetyFence.geofence.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Getter
+@NoArgsConstructor
+@AllArgsConstructor
 public class GeofenceRequestDto {
     @NotBlank(message = "지오펜스 이름은 필수입니다")
     private String name;
@@ -12,16 +16,9 @@ public class GeofenceRequestDto {
     private String address;
 
     private int type;
-    private String startTime;
-    private String endTime;
+    private String startDate;  // yyyy-MM-dd 형식 (일시적 지오펜스용, 선택사항)
+    private String startTime;  // HH:mm 형식 (일시적 지오펜스용, 선택사항)
+    private String endDate;    // yyyy-MM-dd 형식 (일시적 지오펜스용, 선택사항)
+    private String endTime;    // HH:mm 형식 (일시적 지오펜스용, 선택사항)
     private String number;
-
-    public GeofenceRequestDto(String name, String address, int type, String startTime, String endTime, String number) {
-        this.name = name;
-        this.address = address;
-        this.type = type;
-        this.startTime = startTime;
-        this.endTime = endTime;
-        this.number = number;
-    }
 }
