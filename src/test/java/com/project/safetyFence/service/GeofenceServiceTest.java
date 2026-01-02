@@ -198,9 +198,11 @@ class GeofenceServiceTest {
                 "Test Location",
                 "서울시 강남구 테헤란로 152",
                 0,  // permanent type
-                null,
-                null,
-                null  // number field
+                null,  // startDate
+                null,  // startTime
+                null,  // endDate
+                null,  // endTime
+                TEST_NUMBER  // number
         );
 
         int initialCount = testUser.getGeofences().size();
@@ -227,16 +229,20 @@ class GeofenceServiceTest {
     @Disabled("실제 카카오 API 키가 필요하므로 기본적으로 비활성화되어 있습니다.")
     void createNewFence_TemporaryGeofence_Success() {
         // given
+        String startDate = "2024-12-25";
         String startTime = "10:00";
+        String endDate = "2024-12-25";
         String endTime = "18:00";
 
         GeofenceRequestDto requestDto = new GeofenceRequestDto(
                 "Temporary Event",
                 "서울시 강남구 역삼동",
                 1,  // temporary type
+                startDate,
                 startTime,
+                endDate,
                 endTime,
-                null  // number field
+                TEST_NUMBER  // number
         );
 
         int initialCount = testUser.getGeofences().size();
@@ -268,9 +274,11 @@ class GeofenceServiceTest {
                 "Invalid Location",
                 "잘못된주소12345!@#$%",  // 유효하지 않은 주소
                 0,
-                null,
-                null,
-                null
+                null,  // startDate
+                null,  // startTime
+                null,  // endDate
+                null,  // endTime
+                TEST_NUMBER  // number
         );
 
         // when & then
@@ -327,9 +335,11 @@ class GeofenceServiceTest {
                 "Empty Address Location",
                 "",  // 빈 주소
                 0,
-                null,
-                null,
-                null
+                null,  // startDate
+                null,  // startTime
+                null,  // endDate
+                null,  // endTime
+                TEST_NUMBER  // number
         );
 
         // when & then
@@ -346,9 +356,11 @@ class GeofenceServiceTest {
                 "Null Address Location",
                 null,  // null 주소
                 0,
-                null,
-                null,
-                null
+                null,  // startDate
+                null,  // startTime
+                null,  // endDate
+                null,  // endTime
+                TEST_NUMBER  // number
         );
 
         // when & then
