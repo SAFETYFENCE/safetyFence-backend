@@ -1,6 +1,7 @@
 package com.project.safetyFence.medication;
 
 import com.project.safetyFence.medication.dto.*;
+import com.project.safetyFence.mypage.dto.NumberRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -87,6 +88,18 @@ public class MedicationController {
             HttpServletRequest request) {
         String userNumber = (String) request.getAttribute("userNumber");
         List<WardMedicationStatusDto> response = medicationService.getWardsTodayMedicationStatus(userNumber, date);
+        return ResponseEntity.ok(response);
+    }
+
+    // 특정 사용자의 복약 정보 조회 (관리자용)
+    @PostMapping("/medication/list")
+    public ResponseEntity<MedicationListResponseDto> getMedicationsByUserNumber(
+            @RequestBody(required = false) NumberRequestDto numberRequestDto,
+            HttpServletRequest request) {
+        String userNumber = (numberRequestDto != null && numberRequestDto.getNumber() != null)
+                ? numberRequestDto.getNumber()
+                : (String) request.getAttribute("userNumber");
+        MedicationListResponseDto response = medicationService.getMedications(userNumber, null);
         return ResponseEntity.ok(response);
     }
 }
