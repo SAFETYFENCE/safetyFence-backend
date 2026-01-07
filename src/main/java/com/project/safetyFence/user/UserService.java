@@ -8,6 +8,7 @@ import com.project.safetyFence.user.dto.SignUpRequestDto;
 import com.project.safetyFence.link.generator.LinkCodeGenerator;
 import com.project.safetyFence.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -118,6 +120,29 @@ public class UserService {
     // 안전한 API Key 생성 (UUID 사용)
     private String generateSecureApiKey() {
         return UUID.randomUUID().toString().replace("-", "");
+    }
+
+    // 사용자 본인 계정 삭제
+    @Transactional
+    public void deleteOwnAccount(String userNumber, String password) {
+        User user = userRepository.findByNumber(userNumber);
+        if (user == null) {
+            throw new IllegalArgumentException("사용자를 찾을 수 없습니다");
+        }
+
+        // 비밀번호 검증
+        if (!user.getPassword().equals(password)) {
+            log.warn("⚠️ 계정 삭제 실패 - 비밀번호 불일치: {}", userNumber);
+            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다");
+        }
+
+        log.info("🗑️ 사용자 본인 계정 삭제: {} ({})", user.getName(), userNumber);
+
+        // CASCADE 설정으로 모든 연관 데이터 자동 삭제
+        // UserAddress, UserLocation, Log, Link, Geofence, UserEvent, Medication (+ MedicationLog)
+        userRepository.delete(user);
+
+        log.info("✅ 계정 및 연관 데이터 삭제 완료: {}", userNumber);
     }
 
 }

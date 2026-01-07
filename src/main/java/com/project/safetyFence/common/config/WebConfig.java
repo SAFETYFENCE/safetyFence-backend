@@ -26,7 +26,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         "http://localhost:5173",              // Admin web development
                         "http://localhost:3000",              // Alternative dev port
-                        "https://dysxtf9kcwozu.cloudfront.net"            // CloudFront (production)
+                        "https://dysxtf9kcwozu.cloudfront.net",           // CloudFront (production)
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
@@ -35,7 +36,12 @@ public class WebConfig implements WebMvcConfigurer {
 
         // Also allow CORS for non-/api routes used by admin
         registry.addMapping("/user/**")
-                .allowedOriginPatterns("*")
+                .allowedOriginPatterns(
+                        "http://localhost:5173",
+                        "http://localhost:3000",
+                        "https://dysxtf9kcwozu.cloudfront.net",
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
@@ -44,7 +50,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         "http://localhost:5173",
                         "http://localhost:3000",
-                        "https://dysxtf9kcwozu.cloudfront.net"            // CloudFront (production)
+                        "https://dysxtf9kcwozu.cloudfront.net",           // CloudFront (production)
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
                 )
                 .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
@@ -54,7 +61,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         "http://localhost:5173",
                         "http://localhost:3000",
-                        "https://dysxtf9kcwozu.cloudfront.net"            // CloudFront (production)
+                        "https://dysxtf9kcwozu.cloudfront.net",           // CloudFront (production)
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
                 )
                 .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
@@ -64,7 +72,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         "http://localhost:5173",
                         "http://localhost:3000",
-                        "https://dysxtf9kcwozu.cloudfront.net"            // CloudFront (production)
+                        "https://dysxtf9kcwozu.cloudfront.net",           // CloudFront (production)
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
                 )
                 .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
@@ -74,7 +83,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         "http://localhost:5173",
                         "http://localhost:3000",
-                        "https://dysxtf9kcwozu.cloudfront.net"            // CloudFront (production)
+                        "https://dysxtf9kcwozu.cloudfront.net",           // CloudFront (production)
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
                 )
                 .allowedMethods("GET", "OPTIONS")
                 .allowedHeaders("*")
@@ -84,7 +94,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         "http://localhost:5173",
                         "http://localhost:3000",
-                        "https://dysxtf9kcwozu.cloudfront.net"            // CloudFront (production)
+                        "https://dysxtf9kcwozu.cloudfront.net",           // CloudFront (production)
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
                 )
                 .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
@@ -95,7 +106,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         "http://localhost:5173",
                         "http://localhost:3000",
-                        "https://dysxtf9kcwozu.cloudfront.net"            // CloudFront (production)
+                        "https://dysxtf9kcwozu.cloudfront.net",           // CloudFront (production)
+                        "http://safetyfence-admin.s3-website-us-east-1.amazonaws.com"
                 )
                 .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
