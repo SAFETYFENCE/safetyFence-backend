@@ -1,5 +1,6 @@
 package com.project.safetyFence.location;
 
+import com.project.safetyFence.location.dto.BatteryUpdateDto;
 import com.project.safetyFence.location.dto.LocationUpdateDto;
 import com.project.safetyFence.location.LocationCacheService;
 import com.project.safetyFence.location.LocationService;
@@ -88,11 +89,23 @@ public class LocationWebSocketController {
         location.setUserNumber(userNumber);
         location.setTimestamp(System.currentTimeMillis());
 
-        log.debug("위치 업데이트 처리: userNumber={}, lat={}, lng={}",
-                userNumber, location.getLatitude(), location.getLongitude());
+        log.debug("위치 업데이트 처리: userNumber={}, lat={}, lng={}, battery={}",
+                userNumber, location.getLatitude(), location.getLongitude(), location.getBatteryLevel());
 
         // 1. 캐시에 최신 위치 저장
         cacheService.updateLocation(userNumber, location);
+
+        // 1-1. 배터리 정보가 있으면 배터리 캐시도 업데이트
+        if (location.getBatteryLevel() != null) {
+            BatteryUpdateDto battery = new BatteryUpdateDto();
+            battery.setUserNumber(userNumber);
+            battery.setBatteryLevel(location.getBatteryLevel());
+            battery.setTimestamp(System.currentTimeMillis());
+
+            cacheService.updateBattery(userNumber, battery);
+            log.debug("배터리 캐시 업데이트: userNumber={}, level={}",
+                    userNumber, location.getBatteryLevel());
+        }
 
         // 2. 해당 사용자를 구독 중인 모든 클라이언트에게 전송
         messagingTemplate.convertAndSend(
