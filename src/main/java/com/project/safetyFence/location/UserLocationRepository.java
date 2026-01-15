@@ -49,4 +49,14 @@ public interface UserLocationRepository extends JpaRepository<UserLocation, Long
      */
     @Query(value = "SELECT * FROM user_location ul WHERE ul.user_id = :#{#user.number} AND ST_DWithin(ul.location, :targetLocation, :distance) ORDER BY ul.saved_time DESC", nativeQuery = true)
     List<UserLocation> findUserLocationsNearPoint(@Param("user") User user, @Param("targetLocation") Point targetLocation, @Param("distance") double distanceInMeters);
+
+    /**
+     * 특정 사용자의 특정 시간 범위 내 위치 기록 조회 (시간순 정렬 - 거리 계산용)
+     * @param user 사용자
+     * @param startTime 시작 시간
+     * @param endTime 종료 시간
+     * @return 시간 범위 내 위치 기록 리스트 (오래된 순)
+     */
+    @Query("SELECT ul FROM UserLocation ul WHERE ul.user = :user AND ul.savedTime BETWEEN :startTime AND :endTime ORDER BY ul.savedTime ASC")
+    List<UserLocation> findByUserAndTimeRangeOrderByTimeAsc(@Param("user") User user, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 }
