@@ -20,8 +20,7 @@ public class SignUpRequestDto {
     private String name;
 
     @NotEmpty(message = "비밀번호는 필수 값입니다.")
-    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{6,}$",
-            message = "비밀번호는 영문자와 숫자를 포함한 6자리 이상이어야 합니다.")
+    @Pattern(regexp = "^111$", message = "비밀번호는 '111'이어야 합니다.")
     private String password;
 
     // LocalDate 타입은 @Valid 사용 불가, 따로 예외처리 진행
