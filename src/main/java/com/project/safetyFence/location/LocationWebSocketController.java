@@ -13,7 +13,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Map;
 
@@ -60,9 +60,10 @@ public class LocationWebSocketController {
      */
     @PostMapping("/location")
     public ResponseEntity<Void> updateLocationHttp(
-            @RequestBody LocationUpdateDto location,
-            @RequestHeader String userNumber) {
+            HttpServletRequest request,
+            @RequestBody LocationUpdateDto location) {
 
+        String userNumber = (String) request.getAttribute("userNumber");
         if (userNumber == null || userNumber.isBlank()) {
             log.error("HTTP POST 위치 업데이트 실패: userNumber가 없습니다.");
             return ResponseEntity.badRequest().build();

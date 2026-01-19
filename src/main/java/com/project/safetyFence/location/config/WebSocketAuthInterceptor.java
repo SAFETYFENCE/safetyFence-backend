@@ -1,6 +1,7 @@
 package com.project.safetyFence.location.config;
 
 import com.project.safetyFence.link.LinkService;
+import com.project.safetyFence.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -21,6 +22,7 @@ import java.util.regex.Pattern;
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     private final LinkService linkService;
+    private final UserService userService;
     private static final Pattern LOCATION_TOPIC_PATTERN = Pattern.compile("^/topic/location/([^/]+)$");
 
     @Override
@@ -41,12 +43,17 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             log.info("🔍 [CONNECT DEBUG] All native headers: {}", accessor.toNativeHeaderMap());
             log.info("🔍 [CONNECT DEBUG] Message payload type: {}", message.getPayload().getClass());
 
-            // WebSocket 연결 시 사용자 번호 추출
-            String userNumber = accessor.getFirstNativeHeader("userNumber");
+            // WebSocket 연결 시 API 키 검증
+            String apiKey = accessor.getFirstNativeHeader("X-API-Key");
+            if (apiKey == null || apiKey.isBlank()) {
+                log.warn("WebSocket 연결 시도 실패: API 키 없음");
+                throw new IllegalArgumentException("API 키는 필수입니다.");
+            }
 
+            String userNumber = userService.findUserNumberByApiKey(apiKey);
             if (userNumber == null || userNumber.isBlank()) {
-                log.warn("WebSocket 연결 시도 실패: userNumber가 없습니다.");
-                throw new IllegalArgumentException("userNumber는 필수입니다.");
+                log.warn("WebSocket 연결 시도 실패: 유효하지 않은 API 키");
+                throw new IllegalArgumentException("유효하지 않은 API 키입니다.");
             }
 
             // 세션 속성에 사용자 번호 저장
