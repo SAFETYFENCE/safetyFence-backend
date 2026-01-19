@@ -357,4 +357,75 @@ public class NotificationService {
             }
         }
     }
+
+    /**
+     * 약 복용 알림 전송 (스케줄러에서 호출)
+     * 특정 사용자에게 약 복용 시간 알림을 전송
+     * @param user 약이 등록된 사용자
+     * @param reminderTime 알림 시간 (아침/점심/저녁)
+     */
+    @Transactional(readOnly = true)
+    public void sendMedicationReminderNotification(User user, String reminderTime) {
+        List<DeviceToken> tokens = deviceTokenRepository.findByUser(user);
+
+        if (tokens.isEmpty()) {
+            log.info("ℹ️ 디바이스 토큰 없음 - 약 복용 알림 스킵: userNumber={}", user.getNumber());
+            return;
+        }
+
+        String title = "💊 약 드실 시간이에요!";
+        String body = String.format("%s님, %s 약 복용 시간입니다.", user.getName(), reminderTime);
+
+        for (DeviceToken deviceToken : tokens) {
+            sendMedicationReminderFCM(deviceToken.getToken(), title, body, user.getNumber());
+        }
+
+        log.info("✅ 약 복용 알림 전송 완료: userNumber={}, time={}", user.getNumber(), reminderTime);
+    }
+
+    /**
+     * 약 복용 알림 FCM 전송
+     */
+    private void sendMedicationReminderFCM(String token, String title, String body, String userNumber) {
+        try {
+            Message message = Message.builder()
+                    .setToken(token)
+                    .setNotification(Notification.builder()
+                            .setTitle(title)
+                            .setBody(body)
+                            .build())
+                    .putData("type", "medication_reminder")
+                    .putData("userNumber", userNumber)
+                    .putData("timestamp", String.valueOf(System.currentTimeMillis()))
+                    .setAndroidConfig(AndroidConfig.builder()
+                            .setPriority(AndroidConfig.Priority.HIGH)
+                            .setNotification(AndroidNotification.builder()
+                                    .setSound("default")
+                                    .setChannelId("medication_reminders")
+                                    .build())
+                            .build())
+                    .setApnsConfig(ApnsConfig.builder()
+                            .setAps(Aps.builder()
+                                    .setSound("default")
+                                    .setBadge(1)
+                                    .build())
+                            .build())
+                    .build();
+
+            String response = FirebaseMessaging.getInstance().send(message);
+            log.info("✅ 약 복용 FCM 알림 전송 성공: token={}, response={}",
+                    token.substring(0, Math.min(20, token.length())) + "...", response);
+
+        } catch (FirebaseMessagingException e) {
+            log.error("❌ 약 복용 FCM 알림 전송 실패: token={}, error={}",
+                    token.substring(0, Math.min(20, token.length())) + "...", e.getMessage());
+
+            // 토큰 만료 시 삭제
+            if (e.getMessagingErrorCode() == MessagingErrorCode.UNREGISTERED ||
+                    e.getMessagingErrorCode() == MessagingErrorCode.INVALID_ARGUMENT) {
+                deviceTokenRepository.deleteByToken(token);
+                log.info("만료된 토큰 삭제: {}", token.substring(0, Math.min(20, token.length())) + "...");
+            }
+        }
+    }
 }
