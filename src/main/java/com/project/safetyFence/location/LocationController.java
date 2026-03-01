@@ -1,6 +1,7 @@
 package com.project.safetyFence.location;
 
 import com.project.safetyFence.location.dto.DailyDistanceResponseDto;
+import com.project.safetyFence.location.dto.LocationUpdateDto;
 import com.project.safetyFence.mypage.dto.NumberRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.time.LocalDate;
 public class LocationController {
 
     private final LocationService locationService;
+    private final LocationCacheService locationCacheService;
 
     /**
      * 일일 이동거리 조회 (도보만)
@@ -83,5 +85,31 @@ public class LocationController {
         DailyDistanceResponseDto response = locationService.calculateDailyDistance(userNumber, targetDate);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 마지막 위치 조회 (보호자용)
+     * - 캐시 우선 조회 → 캐시 미스 시 DB 폴백
+     * - 보호자가 지도 진입 시 이용자의 마지막 위치를 즉시 표시하기 위한 API
+     *
+     * @param userNumber 조회할 이용자 번호
+     * @return 마지막 위치 정보 (없으면 404)
+     */
+    @GetMapping("/last/{userNumber}")
+    public ResponseEntity<LocationUpdateDto> getLastLocation(@PathVariable String userNumber) {
+        if (userNumber == null || userNumber.isBlank()) {
+            log.error("마지막 위치 조회 실패: userNumber 없음");
+            return ResponseEntity.badRequest().build();
+        }
+
+        LocationUpdateDto location = locationCacheService.getLatestLocationWithFallback(userNumber);
+
+        if (location != null) {
+            log.info("마지막 위치 조회 성공: userNumber={}", userNumber);
+            return ResponseEntity.ok(location);
+        }
+
+        log.warn("마지막 위치 없음: userNumber={}", userNumber);
+        return ResponseEntity.notFound().build();
     }
 }
