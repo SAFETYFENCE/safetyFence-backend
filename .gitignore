@@ -65,3 +65,13 @@ logs/
 claudedocs/DEPLOYMENT_GUIDE.md
 
 src/main/resources/firebase-service-account.json
+
+# k6 테스트 결과 및 민감 데이터
+k6/api-keys.json
+k6/*-result.json
+
+# 배포 아카이브
+*.tar.gz
+
+# 개선 계획 문서
+IMPROVEMENT_PLAN.md
