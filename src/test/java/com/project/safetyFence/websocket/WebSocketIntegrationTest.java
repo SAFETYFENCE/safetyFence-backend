@@ -59,6 +59,9 @@ class WebSocketIntegrationTest {
     private User userA;
     private User userB;
     private User userC;
+    private String apiKeyA;
+    private String apiKeyB;
+    private String apiKeyC;
 
     @BeforeEach
     void setUp() {
@@ -97,6 +100,14 @@ class WebSocketIntegrationTest {
         userB = new User("userB", "사용자B", "password", LocalDate.now(), "LINKB");
         userC = new User("userC", "사용자C", "password", LocalDate.now(), "LINKC");
 
+        apiKeyA = apiKeyFor("userA");
+        apiKeyB = apiKeyFor("userB");
+        apiKeyC = apiKeyFor("userC");
+
+        userA.updateApiKey(apiKeyA);
+        userB.updateApiKey(apiKeyB);
+        userC.updateApiKey(apiKeyC);
+
         userRepository.save(userA);
         userRepository.save(userB);
         userRepository.save(userC);
@@ -117,7 +128,7 @@ class WebSocketIntegrationTest {
     void 시나리오1_WebSocket_연결_성공() throws Exception {
         // Given
         StompHeaders connectHeaders = new StompHeaders();
-        connectHeaders.add("userNumber", "userA");
+        connectHeaders.add("X-API-Key", apiKeyA);
 
         // When
         StompSession session = stompClient.connectAsync(
@@ -134,11 +145,11 @@ class WebSocketIntegrationTest {
     }
 
     @Test
-    @DisplayName("시나리오 2: userNumber 없이 연결 시도 - 실패")
-    void 시나리오2_userNumber_없이_연결_시도_실패() {
+    @DisplayName("시나리오 2: API Key 없이 연결 시도 - 실패")
+    void 시나리오2_API_Key_없이_연결_시도_실패() {
         // Given
         StompHeaders connectHeaders = new StompHeaders();
-        // userNumber 헤더 없음
+        // X-API-Key 헤더 없음
 
         // When & Then
         boolean exceptionOccurred = false;
@@ -166,7 +177,7 @@ class WebSocketIntegrationTest {
     void 시나리오3_권한_있는_사용자_구독_성공() throws Exception {
         // Given
         StompHeaders connectHeaders = new StompHeaders();
-        connectHeaders.add("userNumber", "userA");
+        connectHeaders.add("X-API-Key", apiKeyA);
 
         StompSession session = stompClient.connectAsync(
                 wsUrl,
@@ -202,7 +213,7 @@ class WebSocketIntegrationTest {
     void 시나리오4_권한_없는_사용자_구독_실패() throws Exception {
         // Given
         StompHeaders connectHeaders = new StompHeaders();
-        connectHeaders.add("userNumber", "userA");
+        connectHeaders.add("X-API-Key", apiKeyA);
 
         StompSession session = stompClient.connectAsync(
                 wsUrl,
@@ -244,7 +255,7 @@ class WebSocketIntegrationTest {
         // Given: 두 개의 세션 생성
         // Session 1: userA (구독자)
         StompHeaders connectHeadersA = new StompHeaders();
-        connectHeadersA.add("userNumber", "userA");
+        connectHeadersA.add("X-API-Key", apiKeyA);
         StompSession sessionA = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -254,7 +265,7 @@ class WebSocketIntegrationTest {
 
         // Session 2: userB (위치 전송자)
         StompHeaders connectHeadersB = new StompHeaders();
-        connectHeadersB.add("userNumber", "userB");
+        connectHeadersB.add("X-API-Key", apiKeyB);
         StompSession sessionB = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -311,7 +322,7 @@ class WebSocketIntegrationTest {
 
         // Session A
         StompHeaders connectHeadersA = new StompHeaders();
-        connectHeadersA.add("userNumber", "userA");
+        connectHeadersA.add("X-API-Key", apiKeyA);
         StompSession sessionA = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -321,7 +332,7 @@ class WebSocketIntegrationTest {
 
         // Session C
         StompHeaders connectHeadersC = new StompHeaders();
-        connectHeadersC.add("userNumber", "userC");
+        connectHeadersC.add("X-API-Key", apiKeyC);
         StompSession sessionC = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -331,7 +342,7 @@ class WebSocketIntegrationTest {
 
         // Session B
         StompHeaders connectHeadersB = new StompHeaders();
-        connectHeadersB.add("userNumber", "userB");
+        connectHeadersB.add("X-API-Key", apiKeyB);
         StompSession sessionB = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -369,7 +380,7 @@ class WebSocketIntegrationTest {
     void 시나리오7_구독_취소_후_메시지_수신_안_됨() throws Exception {
         // Given
         StompHeaders connectHeadersA = new StompHeaders();
-        connectHeadersA.add("userNumber", "userA");
+        connectHeadersA.add("X-API-Key", apiKeyA);
         StompSession sessionA = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -378,7 +389,7 @@ class WebSocketIntegrationTest {
         ).get(5, TimeUnit.SECONDS);
 
         StompHeaders connectHeadersB = new StompHeaders();
-        connectHeadersB.add("userNumber", "userB");
+        connectHeadersB.add("X-API-Key", apiKeyB);
         StompSession sessionB = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -412,7 +423,7 @@ class WebSocketIntegrationTest {
     void 시나리오8_연속_위치_업데이트() throws Exception {
         // Given
         StompHeaders connectHeadersA = new StompHeaders();
-        connectHeadersA.add("userNumber", "userA");
+        connectHeadersA.add("X-API-Key", apiKeyA);
         StompSession sessionA = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -421,7 +432,7 @@ class WebSocketIntegrationTest {
         ).get(5, TimeUnit.SECONDS);
 
         StompHeaders connectHeadersB = new StompHeaders();
-        connectHeadersB.add("userNumber", "userB");
+        connectHeadersB.add("X-API-Key", apiKeyB);
         StompSession sessionB = stompClient.connectAsync(
                 wsUrl,
                 new WebSocketHttpHeaders(),
@@ -468,5 +479,9 @@ class WebSocketIntegrationTest {
                 queue.add((LocationUpdateDto) payload);
             }
         };
+    }
+
+    private String apiKeyFor(String userNumber) {
+        return "TEST-API-KEY-" + userNumber;
     }
 }

@@ -18,6 +18,11 @@ public class AuthInterceptor implements HandlerInterceptor {
                            HttpServletResponse response,
                            Object handler) throws Exception {
 
+        // CORS preflight OPTIONS 요청은 인증 제외
+        if ("OPTIONS".equals(request.getMethod())) {
+            return true;
+        }
+
         // 로그인/회원가입은 인증 제외
         String uri = request.getRequestURI();
         if (uri.equals("/user/signIn") || uri.equals("/user/signup")) {

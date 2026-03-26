@@ -4,7 +4,7 @@ import java.security.SecureRandom;
 
 public class UserUtils {
 
-    private static final String CHAR_POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final String CHAR_POOL = "0123456789";
     private static final int LINK_CODE_LENGTH = 6;
     private static final SecureRandom RANDOM = new SecureRandom();
 

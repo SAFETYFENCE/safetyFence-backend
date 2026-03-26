@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -77,8 +78,9 @@ public class MedicationService {
                     List<MedicationLog> logs = medicationLogRepository
                             .findByMedicationIdAndDate(medication.getId(), checkDate);
                     boolean checked = !logs.isEmpty();
+                    int checkCount = logs.size();  // 오늘 몇 번 먹었는지
 
-                    return new MedicationItemDto(medication, checked);
+                    return new MedicationItemDto(medication, checked, checkCount);
                 })
                 .collect(Collectors.toList());
 
@@ -87,20 +89,34 @@ public class MedicationService {
 
     @Transactional
     public MedicationCreateResponseDto createMedication(String userNumber, MedicationRequestDto requestDto) {
-        User user = userRepository.findByNumber(userNumber);
-        if (user == null) {
-            throw new IllegalArgumentException("사용자를 찾을 수 없습니다");
+        // 대상 사용자 결정 (targetUserNumber가 없으면 본인)
+        String targetUserNumber = requestDto.getTargetUserNumber() != null
+                ? requestDto.getTargetUserNumber()
+                : userNumber;
+
+        // 권한 확인: 본인이 아닌 경우 보호자인지 검증
+        if (!targetUserNumber.equals(userNumber)) {
+            boolean isGuardian = linkRepository.existsByUser_NumberAndUserNumber(userNumber, targetUserNumber);
+            if (!isGuardian) {
+                throw new IllegalArgumentException("권한이 없습니다. 해당 사용자의 보호자만 약을 추가할 수 있습니다.");
+            }
+        }
+
+        // 대상 사용자 조회
+        User targetUser = userRepository.findByNumber(targetUserNumber);
+        if (targetUser == null) {
+            throw new IllegalArgumentException("대상 사용자를 찾을 수 없습니다");
         }
 
         Medication medication = new Medication(
-                user,
+                targetUser,  // 대상 사용자에게 약 추가
                 requestDto.getName(),
                 requestDto.getDosage(),
                 requestDto.getPurpose(),
                 requestDto.getFrequency()
         );
 
-        user.addMedication(medication);
+        targetUser.addMedication(medication);
         Medication savedMedication = medicationRepository.save(medication);
 
         return new MedicationCreateResponseDto(savedMedication);
@@ -210,5 +226,53 @@ public class MedicationService {
                 .history(historyItems)
                 .totalCheckCount(historyItems.size())
                 .build();
+    }
+
+    /**
+     * 피보호자들의 약 복용 상태 조회 (보호자용)
+     */
+    public List<WardMedicationStatusDto> getWardsTodayMedicationStatus(String supporterNumber, LocalDate date) {
+        // 내가 구독한 피보호자들 조회
+        User supporter = userRepository.findByNumberWithLinks(supporterNumber);
+        List<Link> wardLinks = supporter.getLinks();
+
+        List<WardMedicationStatusDto> wardStatuses = new ArrayList<>();
+        LocalDate checkDate = (date != null) ? date : LocalDate.now();  // 날짜 파라미터가 없으면 오늘
+
+        for (Link link : wardLinks) {
+            String wardNumber = link.getUserNumber();
+            User ward = userRepository.findByNumber(wardNumber);
+
+            // 피보호자의 약 목록 조회
+            List<Medication> medications = medicationRepository.findByUserNumber(wardNumber);
+
+            // 각 약의 해당 날짜 복용 여부 확인
+            List<MedicationItemDto> medicationItems = medications.stream()
+                    .map(medication -> {
+                        List<MedicationLog> logs = medicationLogRepository
+                                .findByMedicationIdAndDate(medication.getId(), checkDate);
+                        boolean checked = !logs.isEmpty();
+                        int checkCount = logs.size();  // 해당 날짜에 몇 번 먹었는지
+                        return new MedicationItemDto(medication, checked, checkCount);
+                    })
+                    .collect(Collectors.toList());
+
+            // 복용한 약 개수 계산
+            int checkedCount = (int) medicationItems.stream()
+                    .filter(MedicationItemDto::isCheckedToday)
+                    .count();
+
+            WardMedicationStatusDto wardStatus = WardMedicationStatusDto.builder()
+                    .wardNumber(wardNumber)
+                    .wardName(ward.getName())
+                    .medications(medicationItems)
+                    .totalMedications(medicationItems.size())
+                    .checkedMedications(checkedCount)
+                    .build();
+
+            wardStatuses.add(wardStatus);
+        }
+
+        return wardStatuses;
     }
 }

@@ -442,12 +442,13 @@ class LocationSharingE2ETest {
 
     private User createUser(String number, String name, String linkCode) {
         User user = new User(number, name, "password", LocalDate.now(), linkCode);
+        user.updateApiKey(apiKeyFor(number));
         return userRepository.save(user);
     }
 
     private StompSession connectUser(String userNumber) throws Exception {
         StompHeaders connectHeaders = new StompHeaders();
-        connectHeaders.add("userNumber", userNumber);
+        connectHeaders.add("X-API-Key", apiKeyFor(userNumber));
 
         return stompClient.connectAsync(
                 wsUrl,
@@ -469,5 +470,9 @@ class LocationSharingE2ETest {
                 queue.add((LocationUpdateDto) payload);
             }
         };
+    }
+
+    private String apiKeyFor(String userNumber) {
+        return "TEST-API-KEY-" + userNumber;
     }
 }

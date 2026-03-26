@@ -1,6 +1,7 @@
 package com.project.safetyFence.link;
 
 import com.project.safetyFence.link.dto.LinkRequestDto;
+import com.project.safetyFence.link.dto.SupporterResponseDto;
 import com.project.safetyFence.mypage.dto.NumberRequestDto;
 import com.project.safetyFence.link.dto.LinkResponseDto;
 import com.project.safetyFence.link.LinkService;
@@ -39,6 +40,27 @@ public class LinkController {
         return ResponseEntity.ok("Link user deleted successfully");
     }
 
+    @GetMapping("/api/links/my-supporters")
+    public ResponseEntity<List<SupporterResponseDto>> getMySupporters(HttpServletRequest request) {
+        String userNumber = (String) request.getAttribute("userNumber");
+        List<SupporterResponseDto> supporters = linkService.getMySupporters(userNumber);
+        return ResponseEntity.ok(supporters);
+    }
 
+    @PatchMapping("/api/links/{linkId}/primary")
+    public ResponseEntity<String> setPrimarySupporter(
+            HttpServletRequest request,
+            @PathVariable Long linkId) {
+        String userNumber = (String) request.getAttribute("userNumber");
+        linkService.setPrimarySupporter(userNumber, linkId);
+        return ResponseEntity.ok("Primary supporter updated successfully");
+    }
+
+    @GetMapping("/api/links/primary-supporter")
+    public ResponseEntity<SupporterResponseDto> getPrimarySupporter(HttpServletRequest request) {
+        String userNumber = (String) request.getAttribute("userNumber");
+        SupporterResponseDto primarySupporter = linkService.getPrimarySupporter(userNumber);
+        return ResponseEntity.ok(primarySupporter);
+    }
 
 }

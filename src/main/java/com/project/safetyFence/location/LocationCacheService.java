@@ -3,6 +3,7 @@ package com.project.safetyFence.location;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.project.safetyFence.location.domain.UserLocation;
+import com.project.safetyFence.location.dto.BatteryUpdateDto;
 import com.project.safetyFence.location.dto.LocationUpdateDto;
 import com.project.safetyFence.user.UserRepository;
 import com.project.safetyFence.user.domain.User;
@@ -17,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 public class LocationCacheService {
 
     private final Cache<String, LocationUpdateDto> locationCache;
+    private final Cache<String, BatteryUpdateDto> batteryCache;
     private final UserRepository userRepository;
     private final UserLocationRepository userLocationRepository;
 
@@ -24,6 +26,12 @@ public class LocationCacheService {
         this.userRepository = userRepository;
         this.userLocationRepository = userLocationRepository;
         this.locationCache = Caffeine.newBuilder()
+                .maximumSize(10_000)
+                .expireAfterWrite(5, TimeUnit.MINUTES)
+                .recordStats()
+                .build();
+
+        this.batteryCache = Caffeine.newBuilder()
                 .maximumSize(10_000)
                 .expireAfterWrite(5, TimeUnit.MINUTES)
                 .recordStats()
@@ -122,5 +130,25 @@ public class LocationCacheService {
             log.error("DB 조회 중 오류 발생: userNumber={}, error={}", userNumber, e.getMessage(), e);
             return null;
         }
+    }
+
+    // ========== 배터리 캐시 메서드 ==========
+
+    // 배터리 업데이트
+    public void updateBattery(String userNumber, BatteryUpdateDto battery) {
+        batteryCache.put(userNumber, battery);
+        log.debug("배터리 캐시 업데이트: userNumber={}, level={}",
+                userNumber, battery.getBatteryLevel());
+    }
+
+    // 배터리 조회
+    public BatteryUpdateDto getLatestBattery(String userNumber) {
+        return batteryCache.getIfPresent(userNumber);
+    }
+
+    // 배터리 캐시 삭제
+    public void removeBattery(String userNumber) {
+        batteryCache.invalidate(userNumber);
+        log.info("배터리 캐시 삭제: userNumber={}", userNumber);
     }
 }

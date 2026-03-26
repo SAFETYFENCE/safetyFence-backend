@@ -1,9 +1,9 @@
 # Safety Fence API 명세서
 
 > **프로젝트**: Safety Fence - 실시간 위치 추적 및 지오펜스 시스템
-> **버전**: 1.2
+> **버전**: 1.3
 > **작성일**: 2025-10-25
-> **최종 수정**: 2025-12-24
+> **최종 수정**: 2025-12-29
 
 ## 목차
 1. [인증 및 사용자 관리 API](#1-인증-및-사용자-관리-api)
@@ -13,7 +13,9 @@
 5. [캘린더 API](#5-캘린더-api)
 6. [마이페이지 API](#6-마이페이지-api)
 7. [알림 (Notification) API](#7-알림-notification-api)
-8. [WebSocket 실시간 위치 공유 API](#8-websocket-실시간-위치-공유-api)
+8. [배터리 모니터링 API](#8-배터리-모니터링-api)
+9. [WebSocket 실시간 위치 공유 API](#9-websocket-실시간-위치-공유-api)
+10. [약 관리 (Medication) API](#10-약-관리-medication-api)
 
 ---
 
@@ -216,15 +218,28 @@ X-API-Key: your-api-key
   {
     "id": 1,
     "userNumber": "01098765432",
-    "relation": "친구"
+    "relation": "친구",
+    "batteryLevel": 85,
+    "batteryLastUpdate": 1703123456789
   },
   {
     "id": 2,
     "userNumber": "01011112222",
-    "relation": "가족"
+    "relation": "가족",
+    "batteryLevel": null,
+    "batteryLastUpdate": null
   }
 ]
 ```
+
+**Response 필드**:
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| id | Long | 링크 ID |
+| userNumber | String | 연결된 사용자 전화번호 |
+| relation | String | 관계 (친구, 가족 등) |
+| batteryLevel | Integer | 배터리 잔량 (0-100), 최근 5분 이내 데이터가 없으면 null |
+| batteryLastUpdate | Long | 배터리 마지막 업데이트 시간 (Unix timestamp ms), 데이터가 없으면 null |
 
 **React 예시**:
 ```jsx
@@ -250,13 +265,23 @@ const LinkList = () => {
     }
   };
 
+  const formatBatteryTime = (timestamp) => {
+    if (!timestamp) return '정보 없음';
+    const date = new Date(timestamp);
+    return date.toLocaleString('ko-KR');
+  };
+
   return (
     <div>
       <h2>내 링크 목록</h2>
       <ul>
         {links.map(link => (
           <li key={link.id}>
-            {link.userNumber} - {link.relation}
+            <div>{link.userNumber} - {link.relation}</div>
+            <div>
+              배터리: {link.batteryLevel !== null ? `${link.batteryLevel}%` : '정보 없음'}
+              {link.batteryLastUpdate && ` (${formatBatteryTime(link.batteryLastUpdate)})`}
+            </div>
           </li>
         ))}
       </ul>
@@ -392,6 +417,198 @@ const DeleteLink = ({ userNumber, onDeleted }) => {
 
   return (
     <button onClick={handleDeleteLink}>삭제</button>
+  );
+};
+```
+
+---
+
+### 2.4 나를 구독하는 보호자 리스트 조회
+
+**Endpoint**: `GET /api/links/my-supporters`
+
+**Description**: 현재 사용자(피보호자)를 구독하는 모든 보호자의 정보를 조회합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Response**:
+```json
+[
+  {
+    "linkId": 1,
+    "supporterNumber": "01098765432",
+    "supporterName": "김철수",
+    "isPrimary": true
+  },
+  {
+    "linkId": 2,
+    "supporterNumber": "01011112222",
+    "supporterName": "김영희",
+    "isPrimary": false
+  }
+]
+```
+
+**React 예시**:
+```jsx
+const MySupporters = () => {
+  const [supporters, setSupporters] = useState([]);
+
+  useEffect(() => {
+    fetchMySupporters();
+  }, []);
+
+  const fetchMySupporters = async () => {
+    try {
+      const apiKey = localStorage.getItem('apiKey');
+      const response = await axios.get('/api/links/my-supporters', {
+        headers: { 'X-API-Key': apiKey }
+      });
+      setSupporters(response.data);
+    } catch (error) {
+      console.error('보호자 목록 조회 실패:', error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>나를 보호하는 사람들</h2>
+      <ul>
+        {supporters.map(supporter => (
+          <li key={supporter.linkId}>
+            {supporter.supporterName} ({supporter.supporterNumber})
+            {supporter.isPrimary && <span> ⭐ 대표 보호자</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+```
+
+---
+
+### 2.5 대표 보호자 설정
+
+**Endpoint**: `PATCH /api/links/{linkId}/primary`
+
+**Description**: 특정 보호자를 대표 보호자로 설정합니다. 기존 대표 보호자는 자동으로 해제됩니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Path Parameters**:
+- `linkId`: 대표 보호자로 설정할 링크 ID
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Primary supporter updated successfully"
+}
+```
+
+**권한**: 피보호자 본인만 자신의 대표 보호자를 설정할 수 있습니다.
+
+**React 예시**:
+```jsx
+const SetPrimarySupporter = ({ linkId, onUpdated }) => {
+  const handleSetPrimary = async () => {
+    if (!confirm('이 보호자를 대표 보호자로 설정하시겠습니까?')) return;
+
+    try {
+      const apiKey = localStorage.getItem('apiKey');
+      await axios.patch(`/api/links/${linkId}/primary`, {}, {
+        headers: { 'X-API-Key': apiKey }
+      });
+
+      alert('대표 보호자가 설정되었습니다.');
+      onUpdated();
+    } catch (error) {
+      console.error('대표 보호자 설정 실패:', error);
+      alert('설정에 실패했습니다.');
+    }
+  };
+
+  return (
+    <button onClick={handleSetPrimary}>대표 보호자로 설정</button>
+  );
+};
+```
+
+---
+
+### 2.6 대표 보호자 조회
+
+**Endpoint**: `GET /api/links/primary-supporter`
+
+**Description**: 현재 설정된 대표 보호자의 정보를 조회합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Response**:
+```json
+{
+  "linkId": 1,
+  "supporterNumber": "01098765432",
+  "supporterName": "김철수",
+  "isPrimary": true
+}
+```
+
+**Error Response** (대표 보호자 미설정 시):
+```json
+{
+  "status": "error",
+  "message": "대표 보호자가 설정되지 않았습니다.",
+  "code": "PRIMARY_SUPPORTER_NOT_FOUND"
+}
+```
+
+**React 예시**:
+```jsx
+const PrimarySupporterInfo = () => {
+  const [primarySupporter, setPrimarySupporter] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchPrimarySupporter();
+  }, []);
+
+  const fetchPrimarySupporter = async () => {
+    try {
+      const apiKey = localStorage.getItem('apiKey');
+      const response = await axios.get('/api/links/primary-supporter', {
+        headers: { 'X-API-Key': apiKey }
+      });
+      setPrimarySupporter(response.data);
+      setError(null);
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setError('대표 보호자가 설정되지 않았습니다.');
+      } else {
+        console.error('대표 보호자 조회 실패:', error);
+      }
+    }
+  };
+
+  if (error) return <p>{error}</p>;
+  if (!primarySupporter) return <p>로딩중...</p>;
+
+  return (
+    <div>
+      <h3>⭐ 대표 보호자</h3>
+      <p>이름: {primarySupporter.supporterName}</p>
+      <p>연락처: {primarySupporter.supporterNumber}</p>
+    </div>
   );
 };
 ```
@@ -895,6 +1112,24 @@ GET /calendar/userData?date=2025-10-25
       "userEventId": 1,
       "event": "팀 미팅",
       "eventStartTime": "14:00:00"
+    }
+  ],
+  "medications": [
+    {
+      "id": 1,
+      "name": "혈압약",
+      "dosage": "1정",
+      "purpose": "고혈압 치료",
+      "frequency": "하루 1회",
+      "checkedToday": true
+    },
+    {
+      "id": 2,
+      "name": "당뇨약",
+      "dosage": "2정",
+      "purpose": "혈당 조절",
+      "frequency": "하루 2회",
+      "checkedToday": false
     }
   ]
 }
@@ -1683,7 +1918,193 @@ const EmergencyButton = () => {
 
 ---
 
-### 7.4 푸시 알림 수신 처리
+### 7.4 약 추가 알림 전송
+
+**Endpoint**: `POST /notification/medication-added`
+
+**Description**: 보호자가 피보호자의 약을 추가했을 때 피보호자에게 알림을 전송합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key (보호자의 API Key)
+```
+
+**Request Body**:
+```json
+{
+  "targetUserNumber": "01012345678",
+  "medicationName": "타이레놀"
+}
+```
+
+**Request 필드**:
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| targetUserNumber | String | ✅ | 피보호자 전화번호 |
+| medicationName | String | ✅ | 추가된 약 이름 |
+
+**Response**:
+```json
+"Notification sent successfully"
+```
+
+**Error Response**:
+```json
+"권한이 없습니다."  // 보호자-피보호자 관계가 아닌 경우
+"사용자를 찾을 수 없습니다."  // 피보호자를 찾을 수 없는 경우
+```
+
+**알림 메시지 형식**:
+- **제목**: "약 추가 알림"
+- **내용**: "보호자님이 약 '{약이름}'을(를) 추가했습니다"
+- **Android 채널**: `ward_updates` (기본 중요도)
+
+**React Native 예시**:
+```jsx
+import axios from 'axios';
+
+const MedicationManager = () => {
+  const sendMedicationAddedNotification = async (wardNumber, medicationName) => {
+    try {
+      const apiKey = await AsyncStorage.getItem('apiKey');
+
+      const response = await axios.post(
+        '/notification/medication-added',
+        {
+          targetUserNumber: wardNumber,
+          medicationName: medicationName
+        },
+        {
+          headers: { 'X-API-Key': apiKey }
+        }
+      );
+
+      console.log('✅ 약 추가 알림 전송 성공:', response.data);
+      Alert.alert('성공', '피보호자에게 알림이 전송되었습니다.');
+
+    } catch (error) {
+      console.error('❌ 약 추가 알림 전송 실패:', error);
+      Alert.alert('오류', error.response?.data || '알림 전송에 실패했습니다.');
+    }
+  };
+
+  const handleAddMedication = async () => {
+    // 약 추가 로직...
+
+    // 약 추가 후 알림 전송
+    await sendMedicationAddedNotification('01012345678', '타이레놀');
+  };
+
+  return (
+    <TouchableOpacity onPress={handleAddMedication}>
+      <Text>약 추가</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+---
+
+### 7.5 일정 추가 알림 전송
+
+**Endpoint**: `POST /notification/event-added`
+
+**Description**: 보호자가 피보호자의 일정을 추가했을 때 피보호자에게 알림을 전송합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key (보호자의 API Key)
+```
+
+**Request Body**:
+```json
+{
+  "targetUserNumber": "01012345678",
+  "eventTitle": "병원 방문",
+  "eventDate": "2024-01-15",
+  "eventTime": "14:30"
+}
+```
+
+**Request 필드**:
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| targetUserNumber | String | ✅ | 피보호자 전화번호 |
+| eventTitle | String | ✅ | 일정 제목 |
+| eventDate | String | ✅ | 일정 날짜 (yyyy-MM-dd) |
+| eventTime | String | ✅ | 일정 시간 (HH:mm) |
+
+**Response**:
+```json
+"Notification sent successfully"
+```
+
+**Error Response**:
+```json
+"권한이 없습니다."  // 보호자-피보호자 관계가 아닌 경우
+"사용자를 찾을 수 없습니다."  // 피보호자를 찾을 수 없는 경우
+```
+
+**알림 메시지 형식**:
+- **제목**: "일정 추가 알림"
+- **내용**: "보호자님이 일정 '{일정제목}'을(를) {날짜} {시간}에 추가했습니다"
+- **Android 채널**: `ward_updates` (기본 중요도)
+
+**React Native 예시**:
+```jsx
+import axios from 'axios';
+
+const EventManager = () => {
+  const sendEventAddedNotification = async (wardNumber, eventData) => {
+    try {
+      const apiKey = await AsyncStorage.getItem('apiKey');
+
+      const response = await axios.post(
+        '/notification/event-added',
+        {
+          targetUserNumber: wardNumber,
+          eventTitle: eventData.title,
+          eventDate: eventData.date,
+          eventTime: eventData.time
+        },
+        {
+          headers: { 'X-API-Key': apiKey }
+        }
+      );
+
+      console.log('✅ 일정 추가 알림 전송 성공:', response.data);
+      Alert.alert('성공', '피보호자에게 알림이 전송되었습니다.');
+
+    } catch (error) {
+      console.error('❌ 일정 추가 알림 전송 실패:', error);
+      Alert.alert('오류', error.response?.data || '알림 전송에 실패했습니다.');
+    }
+  };
+
+  const handleAddEvent = async () => {
+    const eventData = {
+      title: '병원 방문',
+      date: '2024-01-15',
+      time: '14:30'
+    };
+
+    // 일정 추가 로직...
+
+    // 일정 추가 후 알림 전송
+    await sendEventAddedNotification('01012345678', eventData);
+  };
+
+  return (
+    <TouchableOpacity onPress={handleAddEvent}>
+      <Text>일정 추가</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+---
+
+### 7.6 푸시 알림 수신 처리
 
 **React Native 예시 (포그라운드 + 백그라운드)**:
 ```jsx
@@ -1745,7 +2166,7 @@ export default NotificationHandler;
 
 ---
 
-### 7.5 알림 권한 요청
+### 7.7 알림 권한 요청
 
 **React Native 예시**:
 ```jsx
@@ -1791,7 +2212,909 @@ const RequestNotificationPermission = () => {
 
 ---
 
-## 8. WebSocket 실시간 위치 공유 API
+## 10. 약 관리 (Medication) API
+
+### 10.1 약 리스트 조회 (날짜별 복용 여부 포함)
+
+**Endpoint**: `GET /api/medications`
+
+**Description**: 본인의 약 리스트를 조회합니다. 특정 날짜의 복용 여부를 포함하여 반환합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Query Parameters**:
+- `date` (optional): 조회할 날짜 (형식: `YYYY-MM-DD`, 미입력 시 오늘 날짜)
+
+**Response**:
+```json
+{
+  "checkDate": "2025-12-26",
+  "medications": [
+    {
+      "id": 1,
+      "name": "혈압약",
+      "dosage": "1정",
+      "purpose": "고혈압 치료",
+      "frequency": "하루 1회",
+      "checkedToday": true
+    },
+    {
+      "id": 2,
+      "name": "당뇨약",
+      "dosage": "2정",
+      "purpose": "혈당 조절",
+      "frequency": "하루 2회",
+      "checkedToday": false
+    }
+  ]
+}
+```
+
+**React 예시**:
+```jsx
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const MedicationList = () => {
+  const [medications, setMedications] = useState([]);
+  const [checkDate, setCheckDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchMedications = async (date) => {
+    try {
+      setLoading(true);
+      const apiKey = localStorage.getItem('apiKey');
+
+      const response = await axios.get('/api/medications', {
+        params: { date },
+        headers: { 'X-API-Key': apiKey }
+      });
+
+      setMedications(response.data.medications);
+      setCheckDate(response.data.checkDate);
+
+    } catch (error) {
+      console.error('약 리스트 조회 실패:', error);
+      alert('약 리스트를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMedications(checkDate);
+  }, [checkDate]);
+
+  return (
+    <div>
+      <h2>내 약 리스트</h2>
+
+      <input
+        type="date"
+        value={checkDate}
+        onChange={(e) => setCheckDate(e.target.value)}
+      />
+
+      {loading ? (
+        <p>로딩 중...</p>
+      ) : (
+        <ul>
+          {medications.map(med => (
+            <li key={med.id}>
+              <h3>{med.name} {med.checkedToday && '✅'}</h3>
+              <p>용량: {med.dosage}</p>
+              <p>목적: {med.purpose}</p>
+              <p>복용 빈도: {med.frequency}</p>
+              <p>오늘 복용: {med.checkedToday ? '예' : '아니오'}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+export default MedicationList;
+```
+
+---
+
+### 10.2 약 추가
+
+**Endpoint**: `POST /api/medications`
+
+**Description**: 새로운 약을 등록합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Request Body**:
+```json
+{
+  "name": "혈압약",
+  "dosage": "1정",
+  "purpose": "고혈압 치료",
+  "frequency": "하루 1회"
+}
+```
+
+**Response**:
+```json
+{
+  "id": 1,
+  "name": "혈압약",
+  "dosage": "1정",
+  "purpose": "고혈압 치료",
+  "frequency": "하루 1회"
+}
+```
+
+**React 예시**:
+```jsx
+import { useState } from 'react';
+import axios from 'axios';
+
+const AddMedication = ({ onSuccess }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    dosage: '',
+    purpose: '',
+    frequency: ''
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const apiKey = localStorage.getItem('apiKey');
+
+      const response = await axios.post('/api/medications',
+        formData,
+        { headers: { 'X-API-Key': apiKey } }
+      );
+
+      alert(`약 "${response.data.name}"이(가) 추가되었습니다.`);
+      setFormData({ name: '', dosage: '', purpose: '', frequency: '' });
+
+      if (onSuccess) onSuccess();
+
+    } catch (error) {
+      console.error('약 추가 실패:', error);
+      alert('약 추가에 실패했습니다.');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h2>약 추가</h2>
+
+      <input
+        type="text"
+        placeholder="약 이름"
+        value={formData.name}
+        onChange={(e) => setFormData({...formData, name: e.target.value})}
+        required
+      />
+
+      <input
+        type="text"
+        placeholder="용량 (예: 1정, 500mg)"
+        value={formData.dosage}
+        onChange={(e) => setFormData({...formData, dosage: e.target.value})}
+        required
+      />
+
+      <input
+        type="text"
+        placeholder="목적 (예: 고혈압 치료)"
+        value={formData.purpose}
+        onChange={(e) => setFormData({...formData, purpose: e.target.value})}
+        required
+      />
+
+      <input
+        type="text"
+        placeholder="복용 빈도 (예: 하루 1회)"
+        value={formData.frequency}
+        onChange={(e) => setFormData({...formData, frequency: e.target.value})}
+        required
+      />
+
+      <button type="submit">약 추가</button>
+    </form>
+  );
+};
+
+export default AddMedication;
+```
+
+---
+
+### 10.3 약 삭제
+
+**Endpoint**: `DELETE /api/medications/{medicationId}`
+
+**Description**: 약을 삭제합니다. 본인 또는 보호자만 삭제 가능합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Path Parameters**:
+- `medicationId`: 삭제할 약 ID
+
+**Response**:
+```json
+{
+  "deletedMedicationId": 1
+}
+```
+
+**에러 응답**:
+```json
+{
+  "error": "권한이 없습니다"
+}
+```
+
+**React 예시**:
+```jsx
+import axios from 'axios';
+
+const DeleteMedicationButton = ({ medicationId, onDelete }) => {
+  const handleDelete = async () => {
+    if (!window.confirm('정말 이 약을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const apiKey = localStorage.getItem('apiKey');
+
+      await axios.delete(`/api/medications/${medicationId}`, {
+        headers: { 'X-API-Key': apiKey }
+      });
+
+      alert('약이 삭제되었습니다.');
+      if (onDelete) onDelete();
+
+    } catch (error) {
+      console.error('약 삭제 실패:', error);
+
+      if (error.response?.status === 403) {
+        alert('삭제 권한이 없습니다.');
+      } else {
+        alert('약 삭제에 실패했습니다.');
+      }
+    }
+  };
+
+  return (
+    <button onClick={handleDelete} style={{ color: 'red' }}>
+      삭제
+    </button>
+  );
+};
+
+export default DeleteMedicationButton;
+```
+
+---
+
+### 10.4 약 복용 체크
+
+**Endpoint**: `POST /api/medications/{medicationId}/check`
+
+**Description**: 약 복용을 체크합니다. 본인만 체크 가능하며, 중복 체크도 가능합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Path Parameters**:
+- `medicationId`: 체크할 약 ID
+
+**Response**:
+```json
+{
+  "message": "약 복용이 체크되었습니다",
+  "medicationId": 1,
+  "checkedDateTime": "2025-12-26T14:30:00"
+}
+```
+
+**에러 응답**:
+```json
+{
+  "error": "본인만 약 복용 체크/해제가 가능합니다"
+}
+```
+
+**React 예시**:
+```jsx
+import axios from 'axios';
+
+const CheckMedicationButton = ({ medicationId, isChecked, onUpdate }) => {
+  const handleCheck = async () => {
+    try {
+      const apiKey = localStorage.getItem('apiKey');
+
+      const response = await axios.post(
+        `/api/medications/${medicationId}/check`,
+        {},
+        { headers: { 'X-API-Key': apiKey } }
+      );
+
+      alert(response.data.message);
+      if (onUpdate) onUpdate();
+
+    } catch (error) {
+      console.error('약 복용 체크 실패:', error);
+
+      if (error.response?.status === 403) {
+        alert('본인만 복용 체크가 가능합니다.');
+      } else {
+        alert('복용 체크에 실패했습니다.');
+      }
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCheck}
+      disabled={isChecked}
+      style={{
+        backgroundColor: isChecked ? '#4CAF50' : '#ccc',
+        color: 'white'
+      }}
+    >
+      {isChecked ? '복용 완료 ✅' : '복용 체크'}
+    </button>
+  );
+};
+
+export default CheckMedicationButton;
+```
+
+---
+
+### 10.5 약 복용 체크 해제
+
+**Endpoint**: `DELETE /api/medications/{medicationId}/uncheck`
+
+**Description**: 가장 최근 약 복용 체크를 해제합니다. 본인만 해제 가능합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Path Parameters**:
+- `medicationId`: 체크 해제할 약 ID
+
+**Response**:
+```json
+{
+  "message": "약 복용 체크가 해제되었습니다",
+  "medicationId": 1,
+  "uncheckedDateTime": "2025-12-26T14:30:00"
+}
+```
+
+**에러 응답**:
+```json
+{
+  "error": "복용 체크 기록이 없습니다"
+}
+```
+
+**React 예시**:
+```jsx
+import axios from 'axios';
+
+const UncheckMedicationButton = ({ medicationId, onUpdate }) => {
+  const handleUncheck = async () => {
+    if (!window.confirm('최근 복용 체크를 해제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const apiKey = localStorage.getItem('apiKey');
+
+      const response = await axios.delete(
+        `/api/medications/${medicationId}/uncheck`,
+        { headers: { 'X-API-Key': apiKey } }
+      );
+
+      alert(response.data.message);
+      if (onUpdate) onUpdate();
+
+    } catch (error) {
+      console.error('체크 해제 실패:', error);
+
+      if (error.response?.status === 404) {
+        alert('복용 체크 기록이 없습니다.');
+      } else if (error.response?.status === 403) {
+        alert('본인만 체크 해제가 가능합니다.');
+      } else {
+        alert('체크 해제에 실패했습니다.');
+      }
+    }
+  };
+
+  return (
+    <button onClick={handleUncheck} style={{ color: 'orange' }}>
+      체크 해제
+    </button>
+  );
+};
+
+export default UncheckMedicationButton;
+```
+
+---
+
+### 10.6 약 복용 이력 조회
+
+**Endpoint**: `GET /api/medications/{medicationId}/history`
+
+**Description**: 특정 약의 복용 이력을 조회합니다. 본인 또는 보호자가 조회 가능합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Path Parameters**:
+- `medicationId`: 이력을 조회할 약 ID
+
+**Query Parameters**:
+- `startDate` (optional): 시작 날짜 (형식: `YYYY-MM-DD`)
+- `endDate` (optional): 종료 날짜 (형식: `YYYY-MM-DD`)
+
+**Response**:
+```json
+{
+  "medicationId": 1,
+  "medicationName": "혈압약",
+  "history": [
+    {
+      "logId": 101,
+      "checkedDateTime": "2025-12-26T08:30:00"
+    },
+    {
+      "logId": 102,
+      "checkedDateTime": "2025-12-25T08:25:00"
+    },
+    {
+      "logId": 103,
+      "checkedDateTime": "2025-12-24T08:35:00"
+    }
+  ],
+  "totalCheckCount": 3
+}
+```
+
+**React 예시**:
+```jsx
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const MedicationHistory = ({ medicationId }) => {
+  const [history, setHistory] = useState(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const fetchHistory = async () => {
+    try {
+      setLoading(true);
+      const apiKey = localStorage.getItem('apiKey');
+
+      const params = {};
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+
+      const response = await axios.get(
+        `/api/medications/${medicationId}/history`,
+        {
+          params,
+          headers: { 'X-API-Key': apiKey }
+        }
+      );
+
+      setHistory(response.data);
+
+    } catch (error) {
+      console.error('이력 조회 실패:', error);
+      alert('복용 이력 조회에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, [medicationId]);
+
+  return (
+    <div>
+      <h2>{history?.medicationName} 복용 이력</h2>
+
+      <div>
+        <label>시작 날짜: </label>
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+
+        <label>종료 날짜: </label>
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+
+        <button onClick={fetchHistory}>조회</button>
+      </div>
+
+      {loading ? (
+        <p>로딩 중...</p>
+      ) : history ? (
+        <div>
+          <p>총 복용 횟수: {history.totalCheckCount}회</p>
+
+          <ul>
+            {history.history.map(log => (
+              <li key={log.logId}>
+                {new Date(log.checkedDateTime).toLocaleString('ko-KR')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p>이력이 없습니다.</p>
+      )}
+    </div>
+  );
+};
+
+export default MedicationHistory;
+```
+
+---
+
+### 10.7 피보호자들의 당일 약 복용 상태 조회 (보호자용)
+
+**Endpoint**: `GET /api/medications/wards-today`
+
+**Description**: 보호자가 자신이 구독한 피보호자들의 오늘 약 복용 상태를 조회합니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Response**:
+```json
+[
+  {
+    "wardNumber": "010-1234-5678",
+    "wardName": "김할머니",
+    "medications": [
+      {
+        "id": 1,
+        "name": "혈압약",
+        "dosage": "1정",
+        "purpose": "고혈압 치료",
+        "frequency": "하루 1회",
+        "checkedToday": true
+      },
+      {
+        "id": 2,
+        "name": "당뇨약",
+        "dosage": "2정",
+        "purpose": "혈당 조절",
+        "frequency": "하루 2회",
+        "checkedToday": false
+      }
+    ],
+    "totalMedications": 2,
+    "checkedMedications": 1
+  },
+  {
+    "wardNumber": "010-9876-5432",
+    "wardName": "박할아버지",
+    "medications": [
+      {
+        "id": 3,
+        "name": "관절약",
+        "dosage": "1정",
+        "purpose": "관절염 치료",
+        "frequency": "하루 1회",
+        "checkedToday": true
+      }
+    ],
+    "totalMedications": 1,
+    "checkedMedications": 1
+  }
+]
+```
+
+**React 예시**:
+```jsx
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const WardsMedicationStatus = () => {
+  const [wardsStatus, setWardsStatus] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchWardsStatus = async () => {
+    try {
+      setLoading(true);
+      const apiKey = localStorage.getItem('apiKey');
+
+      const response = await axios.get('/api/medications/wards-today', {
+        headers: { 'X-API-Key': apiKey }
+      });
+
+      setWardsStatus(response.data);
+
+    } catch (error) {
+      console.error('피보호자 약 상태 조회 실패:', error);
+      alert('피보호자 약 복용 상태를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWardsStatus();
+
+    // 5분마다 자동 갱신
+    const interval = setInterval(fetchWardsStatus, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getCompletionRate = (checked, total) => {
+    if (total === 0) return 0;
+    return Math.round((checked / total) * 100);
+  };
+
+  return (
+    <div>
+      <h2>피보호자 약 복용 현황 (오늘)</h2>
+
+      <button onClick={fetchWardsStatus} disabled={loading}>
+        {loading ? '로딩 중...' : '새로고침'}
+      </button>
+
+      {wardsStatus.length === 0 ? (
+        <p>구독한 피보호자가 없습니다.</p>
+      ) : (
+        <div>
+          {wardsStatus.map(ward => {
+            const completionRate = getCompletionRate(
+              ward.checkedMedications,
+              ward.totalMedications
+            );
+
+            return (
+              <div key={ward.wardNumber} style={{
+                border: '1px solid #ddd',
+                padding: '15px',
+                margin: '10px 0',
+                borderRadius: '8px'
+              }}>
+                <h3>{ward.wardName}</h3>
+                <p>{ward.wardNumber}</p>
+
+                <div style={{
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  color: completionRate === 100 ? 'green' : 'orange'
+                }}>
+                  복용률: {completionRate}%
+                  ({ward.checkedMedications}/{ward.totalMedications})
+                </div>
+
+                <ul>
+                  {ward.medications.map(med => (
+                    <li key={med.id}>
+                      <strong>{med.name}</strong>
+                      {med.checkedToday ? ' ✅ 복용 완료' : ' ❌ 미복용'}
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {med.dosage} - {med.purpose} ({med.frequency})
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+
+                {completionRate < 100 && (
+                  <div style={{
+                    backgroundColor: '#fff3cd',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    marginTop: '10px'
+                  }}>
+                    ⚠️ 아직 복용하지 않은 약이 있습니다.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default WardsMedicationStatus;
+```
+
+---
+
+## 8. 배터리 모니터링 API
+
+### 8.1 배터리 정보 업데이트
+
+**Endpoint**: `POST /battery`
+
+**Description**: 사용자의 배터리 정보를 서버 메모리(Caffeine Cache)에 업데이트합니다. 5분 TTL이 적용되며, 링크 목록 조회 시 자동으로 포함됩니다.
+
+**Headers**:
+```
+X-API-Key: your-api-key
+```
+
+**Request Body**:
+```json
+{
+  "batteryLevel": 85
+}
+```
+
+**Request 필드**:
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| batteryLevel | Integer | ✅ | 배터리 잔량 (0-100) |
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "배터리 정보가 업데이트되었습니다",
+  "batteryLevel": 85,
+  "timestamp": 1703123456789
+}
+```
+
+**Response 필드**:
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| status | String | 처리 상태 ("success") |
+| message | String | 결과 메시지 |
+| batteryLevel | Integer | 업데이트된 배터리 잔량 |
+| timestamp | Long | 업데이트 시간 (Unix timestamp ms) |
+
+**Error Response**:
+```json
+{
+  "status": "error",
+  "message": "배터리 레벨은 0에서 100 사이여야 합니다"
+}
+```
+
+**캐시 특성**:
+- **TTL (Time To Live)**: 5분
+- **저장소**: 메모리 (Caffeine Cache)
+- **영속성**: 없음 (서버 재시작 시 초기화)
+- **최대 크기**: 10,000개 항목
+
+**React Native 예시 (포그라운드 + 백그라운드)**:
+```jsx
+import { useEffect } from 'react';
+import { AppState } from 'react-native';
+import DeviceInfo from 'react-native-device-info';
+import axios from 'axios';
+import BackgroundTimer from 'react-native-background-timer';
+
+const BatteryMonitor = () => {
+  const sendBatteryUpdate = async () => {
+    try {
+      const batteryLevel = await DeviceInfo.getBatteryLevel();
+      const apiKey = await AsyncStorage.getItem('apiKey');
+
+      const response = await axios.post(
+        '/battery',
+        {
+          batteryLevel: Math.round(batteryLevel * 100)
+        },
+        {
+          headers: { 'X-API-Key': apiKey }
+        }
+      );
+
+      console.log('✅ 배터리 업데이트 성공:', response.data);
+
+    } catch (error) {
+      console.error('❌ 배터리 업데이트 실패:', error);
+    }
+  };
+
+  useEffect(() => {
+    // 초기 전송
+    sendBatteryUpdate();
+
+    // 5분마다 전송 (포그라운드)
+    const foregroundInterval = setInterval(() => {
+      sendBatteryUpdate();
+    }, 5 * 60 * 1000);
+
+    // 백그라운드 타이머 설정
+    BackgroundTimer.runBackgroundTimer(() => {
+      sendBatteryUpdate();
+    }, 5 * 60 * 1000);
+
+    // 클린업
+    return () => {
+      clearInterval(foregroundInterval);
+      BackgroundTimer.stopBackgroundTimer();
+    };
+  }, []);
+
+  // 앱 상태 변경 감지
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('앱이 포그라운드로 전환됨 - 배터리 업데이트');
+        sendBatteryUpdate();
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
+
+  return null;
+};
+
+export default BatteryMonitor;
+```
+
+**iOS 백그라운드 설정** (Info.plist):
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>fetch</string>
+  <string>processing</string>
+</array>
+```
+
+**Android 백그라운드 설정** (AndroidManifest.xml):
+```xml
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+```
+
+**권장 사항**:
+- **전송 주기**: 5분 (배터리 소모 최소화)
+- **에러 처리**: 실패 시 재시도 로직 구현
+- **배터리 최적화**: 백그라운드 제한 해제 요청
+- **사용자 알림**: 배터리 모니터링 목적 명시
+
+---
+
+## 9. WebSocket 실시간 위치 공유 API
 
 ### 7.1 WebSocket 개요
 

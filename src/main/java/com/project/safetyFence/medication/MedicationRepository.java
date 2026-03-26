@@ -11,4 +11,10 @@ public interface MedicationRepository extends JpaRepository<Medication, Long> {
 
     @Query("SELECT m FROM Medication m WHERE m.user.number = :userNumber ORDER BY m.id DESC")
     List<Medication> findByUserNumber(@Param("userNumber") String userNumber);
+
+    /**
+     * 약이 등록된 모든 사용자 조회 (중복 제거)
+     */
+    @Query("SELECT DISTINCT m.user FROM Medication m")
+    List<com.project.safetyFence.user.domain.User> findAllUsersWithMedications();
 }

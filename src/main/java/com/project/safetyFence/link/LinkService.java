@@ -4,10 +4,13 @@ import com.project.safetyFence.link.domain.Link;
 import com.project.safetyFence.user.domain.User;
 import com.project.safetyFence.link.dto.LinkRequestDto;
 import com.project.safetyFence.link.dto.LinkResponseDto;
+import com.project.safetyFence.link.dto.SupporterResponseDto;
 import com.project.safetyFence.common.exception.CustomException;
 import com.project.safetyFence.common.exception.ErrorResult;
 import com.project.safetyFence.link.LinkRepository;
 import com.project.safetyFence.user.UserRepository;
+import com.project.safetyFence.location.LocationCacheService;
+import com.project.safetyFence.location.dto.BatteryUpdateDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +23,7 @@ public class LinkService {
 
     private final LinkRepository linkRepository;
     private final UserRepository userRepository;
+    private final LocationCacheService cacheService;
 
     @Transactional
     public List<LinkResponseDto> getUserLink(String userNumber) {
@@ -28,11 +32,31 @@ public class LinkService {
         List<Link> links = user.getLinks();
 
         return links.stream()
-                .map(link -> new LinkResponseDto(
-                        link.getId(),
-                        link.getUserNumber(),
-                        link.getRelation()
-                ))
+                .map(link -> {
+                    String linkUserNumber = link.getUserNumber();
+
+                    // 캐시에서 배터리 정보 조회
+                    BatteryUpdateDto battery =
+                        cacheService.getLatestBattery(linkUserNumber);
+
+                    if (battery != null) {
+                        // 배터리 정보 포함
+                        return new LinkResponseDto(
+                            link.getId(),
+                            linkUserNumber,
+                            link.getRelation(),
+                            battery.getBatteryLevel(),
+                            battery.getTimestamp()
+                        );
+                    } else {
+                        // 배터리 정보 없음 (역호환)
+                        return new LinkResponseDto(
+                            link.getId(),
+                            linkUserNumber,
+                            link.getRelation()
+                        );
+                    }
+                })
                 .toList();
     }
 
@@ -82,6 +106,58 @@ public class LinkService {
 
     public boolean hasLink(String subscriberNumber, String targetUserNumber) {
         return linkRepository.existsByUser_NumberAndUserNumber(subscriberNumber, targetUserNumber);
+    }
+
+    /**
+     * 나를 구독하는 보호자(supporter) 리스트 조회
+     */
+    @Transactional(readOnly = true)
+    public List<SupporterResponseDto> getMySupporters(String userNumber) {
+        // userNumber로 나를 구독하는 Link 조회
+        List<Link> supporterLinks = linkRepository.findByUserNumber(userNumber);
+
+        return supporterLinks.stream()
+                .map(SupporterResponseDto::new)
+                .toList();
+    }
+
+    /**
+     * 대표 보호자 설정
+     */
+    @Transactional
+    public void setPrimarySupporter(String userNumber, Long linkId) {
+        // 해당 링크 조회
+        Link targetLink = linkRepository.findById(linkId)
+                .orElseThrow(() -> new CustomException(ErrorResult.LINK_NOT_FOUND));
+
+        // 권한 확인: 요청자가 피보호자 본인인지 확인
+        if (!targetLink.getUserNumber().equals(userNumber)) {
+            throw new CustomException(ErrorResult.UNAUTHORIZED_ACCESS);
+        }
+
+        // 같은 피보호자의 모든 링크를 조회하여 isPrimary를 false로 설정
+        List<Link> allLinks = linkRepository.findByUserNumber(userNumber);
+        allLinks.forEach(link -> link.setPrimary(false));
+
+        // 선택한 링크만 대표 보호자로 설정
+        targetLink.setPrimary(true);
+    }
+
+    /**
+     * 대표 보호자 조회
+     */
+    @Transactional(readOnly = true)
+    public SupporterResponseDto getPrimarySupporter(String userNumber) {
+        // userNumber로 나를 구독하는 Link 조회
+        List<Link> supporterLinks = linkRepository.findByUserNumber(userNumber);
+
+        // isPrimary가 true인 링크 찾기
+        Link primaryLink = supporterLinks.stream()
+                .filter(Link::getIsPrimary)
+                .findFirst()
+                .orElseThrow(() -> new CustomException(ErrorResult.PRIMARY_SUPPORTER_NOT_FOUND));
+
+        return new SupporterResponseDto(primaryLink);
     }
 
 }

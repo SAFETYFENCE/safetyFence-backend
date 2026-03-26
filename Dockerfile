@@ -42,5 +42,9 @@ EXPOSE 8080
 # 5. 애플리케이션 실행 명령어
 # ============================================
 # 컨테이너가 시작될 때 실행할 명령어
-# java -jar app.jar로 Spring Boot 실행
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Java 힙 메모리 제한 설정:
+# -Xms256m: 초기 힙 메모리 256MB
+# -Xmx512m: 최대 힙 메모리 512MB (OOM 방지)
+# -XX:+UseG1GC: G1 가비지 컬렉터 사용 (메모리 효율적)
+# -XX:MaxGCPauseMillis=200: GC 일시정지 시간 최대 200ms
+ENTRYPOINT ["java", "-Xms256m", "-Xmx512m", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=200", "-jar", "app.jar"]

@@ -1,6 +1,7 @@
 package com.project.safetyFence.medication;
 
 import com.project.safetyFence.medication.dto.*;
+import com.project.safetyFence.mypage.dto.NumberRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -8,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -76,6 +78,28 @@ public class MedicationController {
         MedicationHistoryResponseDto response = medicationService.getMedicationHistory(
                 userNumber, medicationId, startDate, endDate
         );
+        return ResponseEntity.ok(response);
+    }
+
+    // 피보호자들의 약 복용 상태 조회 (보호자용)
+    @GetMapping("/api/medications/wards-today")
+    public ResponseEntity<List<WardMedicationStatusDto>> getWardsTodayMedicationStatus(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            HttpServletRequest request) {
+        String userNumber = (String) request.getAttribute("userNumber");
+        List<WardMedicationStatusDto> response = medicationService.getWardsTodayMedicationStatus(userNumber, date);
+        return ResponseEntity.ok(response);
+    }
+
+    // 특정 사용자의 복약 정보 조회 (관리자용)
+    @PostMapping("/medication/list")
+    public ResponseEntity<MedicationListResponseDto> getMedicationsByUserNumber(
+            @RequestBody(required = false) NumberRequestDto numberRequestDto,
+            HttpServletRequest request) {
+        String userNumber = (numberRequestDto != null && numberRequestDto.getNumber() != null)
+                ? numberRequestDto.getNumber()
+                : (String) request.getAttribute("userNumber");
+        MedicationListResponseDto response = medicationService.getMedications(userNumber, null);
         return ResponseEntity.ok(response);
     }
 }

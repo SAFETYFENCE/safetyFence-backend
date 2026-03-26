@@ -8,4 +8,5 @@ public class MedicationRequestDto {
     private String dosage;
     private String purpose;
     private String frequency;
+    private String targetUserNumber;  // 약을 추가할 대상 (없으면 본인)
 }
