@@ -13,6 +13,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgis/postgis:15-3.3
+        env:
+          POSTGRES_DB: safetyfence_test_db
+          POSTGRES_USER: safetyfence
+          POSTGRES_PASSWORD: chung0513
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +41,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle (includes tests + JaCoCo report)
+        env:
+          SPRING_PROFILES_ACTIVE: test
         run: ./gradlew build
 
       - name: Upload JaCoCo Report
