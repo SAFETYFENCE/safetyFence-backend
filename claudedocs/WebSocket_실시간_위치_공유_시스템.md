@@ -2257,15 +2257,3 @@ public void checkGeofenceEntry(LocationUpdateDto location) {
 - 📱 **모바일 최적화**: React Native 네이티브 WebSocket + Heartbeat (10초 주기)
 - 🔌 **백그라운드 폴백**: HTTP POST 메커니즘으로 백그라운드 상태에서도 위치 전송
 
-### 다음 단계
-1. **Frontend 구현**: React + @stomp/stompjs
-2. **지도 통합**: Kakao Map API 또는 Google Maps
-3. **테스트**: 단위/통합 테스트 작성
-4. **모니터링**: 캐시 히트율, WebSocket 연결 수 모니터링
-5. **프로덕션 배포**: HTTPS, 도메인 CORS 설정
-
----
-
-**문서 작성일**: 2025-10-24
-**작성자**: Claude Code
-**버전**: 1.0.0
