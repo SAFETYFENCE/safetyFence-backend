@@ -178,7 +178,6 @@ open build/reports/jacoco/test/html/index.html
 | 지표 | HTTP Polling | WebSocket | 개선율 |
 |------|-------------|-----------|--------|
 | 네트워크 트래픽 | 매 1-2초 폴링 | 변경 시만 전송 | 90% 감소 |
-| 실시간성 (p95) | 3.60ms | 0.03ms | 99% 개선 |
 | 서버 부하 | N명 × 1req/s | 연결 유지만 | 대폭 감소 |
 
 ### 2. Caffeine Cache
