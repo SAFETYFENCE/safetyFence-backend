@@ -16,7 +16,8 @@ services:
     # 볼륨 마운트: 로컬 파일을 컨테이너 안으로 연결
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf  # Nginx 설정 파일
-      - ./nginx/ssl:/etc/nginx/ssl                # SSL 인증서 폴더 (나중에 생김)
+      - /etc/letsencrypt:/etc/letsencrypt:ro       # SSL 인증서 원본 (읽기 전용)
+      - ./certbot/webroot:/var/www/certbot:ro      # certbot webroot 검증용
 
     # 의존성: app 컨테이너가 먼저 실행되어야 함
     depends_on:
@@ -70,7 +71,22 @@ services:
       - safetyfence-net
 
   # ============================================
-  # 3. PostgreSQL + PostGIS 데이터베이스
+  # 3. Promtail — 로그를 모니터링 서버(Loki)로 전송
+  # ============================================
+  promtail:
+    image: grafana/promtail:latest
+    container_name: safetyfence-promtail
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # 다른 컨테이너 로그 접근
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml
+    restart: unless-stopped
+    networks:
+      - safetyfence-net
+
+  # ============================================
+  # 4. PostgreSQL + PostGIS 데이터베이스
   # ============================================
   db:
     # PostGIS가 포함된 PostgreSQL 이미지
