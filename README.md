@@ -1,11 +1,15 @@
-# SafetyFence Backend
+
+# SafetyFence
+
+<img width="663" height="440" alt="스크린샷 2026-03-30 오후 1 08 36" src="https://github.com/user-attachments/assets/0f1ac77f-bdb3-499f-80a4-05249f20d4f4" />
+
+교통약자(치매 환자, 어린이 등)의 실시간 위치를 보호자와 공유하고, 지오펜스 기반 안전 알림을 제공하는 백엔드 서비스입니다.
 
 [![CI](https://github.com/SAFETYFENCE/safetyFence-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/SAFETYFENCE/safetyFence-backend/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-17-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-green)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%20%2B%20PostGIS-blue)
 
-교통약자(치매 환자, 어린이 등)의 실시간 위치를 보호자와 공유하고, 지오펜스 기반 안전 알림을 제공하는 백엔드 서비스입니다.
 
 ## Features
 
@@ -30,19 +34,8 @@
 
 ## Architecture
 
-```
-React Native App
-        │
-   HTTP / WebSocket
-        │
-   ┌────▼────┐     ┌──────────────┐     ┌──────────────────┐
-   │  Nginx  │────►│ Spring Boot  │────►│ PostgreSQL       │
-   │  (SSL)  │     │              │     │ + PostGIS        │
-   └─────────┘     │  REST API    │     └──────────────────┘
-                   │  STOMP WS    │
-                   │  Caffeine    │────► Firebase FCM
-                   └──────────────┘────► Kakao Maps API
-```
+<img width="641" height="459" alt="안전울타리_서비스아키텍처" src="https://github.com/user-attachments/assets/5f522c59-9992-4223-90e0-05e68582ae20" />
+
 
 ## Getting Started
 
